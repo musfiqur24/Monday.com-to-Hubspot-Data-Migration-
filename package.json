@@ -7,10 +7,10 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node src/server.js",
-    "migrate": "node src/cli.js",
-    "verify-files": "node src/verify-files.js"
+    "start": "node backend/src/server.js",
+    "dev": "node backend/src/server.js",
+    "migrate": "node backend/src/cli.js",
+    "verify-files": "node backend/src/verify-files.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
@@ -19,6 +19,7 @@
     "express": "^5.1.0",
     "got-scraping": "^4.2.2",
     "helmet": "^8.1.0",
+    "lucide": "^1.68.0",
     "multer": "^2.4.0",
     "p-limit": "^6.2.0",
     "p-queue": "^10.0.0",

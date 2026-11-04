@@ -10,7 +10,9 @@ const strategies = { same_property:'All files in this property', numbered:'Separ
 let config, items = [], properties = [], sourceColumns = [], previews = {}, workbook, savedProgress, columnCoverage = [];
 let currentStep = 0, filter = 'all', dirty = false, localBusy = false, connected = false, state = {}, preflight = null, preflightFresh = false;
 let logs = [], lastLogId = 0, selectedFile = null, requestKind = null, initialStatus = true, validationInvalidated = false;
-function notify(message, type = 'info') { $('notice').textContent = message; $('notice').className = `notice ${type}`; $('notice').hidden = !message; }
+function notify(message, type = 'info') { $('notice').hidden = true; window.UI.toast(message,type); }
+const mondayWorkflow = window.UI.progress({onSelect:step=>go(step),label:'Monday to HubSpot progress'});
+$('notice').before(mondayWorkflow.root);
 function badge(text, type = 'neutral') { return node('span',`pill ${type}`,text); }
 function statCards(target, cards) {
   $(target).replaceChildren(...cards.map(([label,value,description]) => {
@@ -18,8 +20,7 @@ function statCards(target, cards) {
   }));
 }
 async function api(url, method = 'GET', body) {
-  const response = await fetch(url,{method,headers:body instanceof FormData ? {} : {'Content-Type':'application/json'},body:body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body)});
-  const data = await response.json(); if (!response.ok) throw new Error(data.error || `Request failed (${response.status}).`); return data;
+  return window.UI.request(url,method,body);
 }
 function activity(message, level = 'info', timestamp = new Date().toISOString()) {
   logs.push({message,level,timestamp}); logs = logs.slice(-150); renderLogs();
@@ -474,7 +475,7 @@ async function refreshProperties() {
     for(const id of ['all-properties','file-properties'])$(id).replaceChildren();
     for(const property of properties.filter(p=>!p.modificationMetadata?.readOnlyValue&&!p.calculated&&!p.externalOptions)) {const option=node('option');option.value=property.name;option.label=`${property.label} (${property.type})`;$(property.fieldType==='file'?'file-properties':'all-properties').append(option);}
     renderMappings();
-  } finally {$('refresh-properties').textContent='↻ Refresh HubSpot properties';}
+  } finally {$('refresh-properties').textContent='Refresh HubSpot properties';}
 }
 async function load() {
   const data=await api('/api/config');config=data.mapping;sourceColumns=data.columns;previews=data.previews||{};workbook=data.workbookSummary;savedProgress=data.savedProgress;
@@ -489,7 +490,7 @@ async function load() {
   $('workbook-badge').textContent=workbook?'Ready':'Missing';$('workbook-badge').className=`pill ${workbook?'success':'warning'}`;
   statCards('workbook-stats',[['Contacts in workbook',workbook?.contacts,'Matched using the Email column'],['Linked files',workbook?.files,'Every URL is included'],['Contact columns',workbook?.columns,'Review destinations in the next step'],['Already uploaded',savedProgress?.filesUploaded||0,'Successful files will be reused']]);
   renderMappings();renderReview();renderResults();
-  if(!data.credentialsConfigured)notify('Add both API credentials to your local .env file and restart the app before checking HubSpot.','error');
+  if(!data.credentialsConfigured)notify('Configure MONDAY_API_TOKEN, HUBSPOT_PORTAL_ID and HUBSPOT_PRIVATE_APP_TOKEN in .env, then restart before running Monday migrations.','error');
   else if(data.workbookError)notify(data.workbookError,'error');
   else refreshProperties().catch(error=>notify(`Workbook loaded. Property list could not refresh: ${error.message}`,'error'));
   updateControls();
@@ -523,7 +524,7 @@ async function checkPreflight() {
 function realMode() {return document.querySelector('input[name=run-mode]:checked').value==='real';}
 function updateControls() {
   const busy=localBusy||state.running;
-  document.querySelectorAll('main input, main select, main button').forEach(el=>{
+  document.querySelectorAll('#monday-module input, #monday-module select, #monday-module button').forEach(el=>{
     const permanentlyDisabled=el.classList.contains('destination')&&(el.closest('tr')?.querySelector('.column-kind')?.textContent==='MATCH KEY'||el.getAttribute('aria-label')==='HubSpot property for Source');
     el.disabled=Boolean(busy||permanentlyDisabled);
   });
@@ -536,6 +537,8 @@ function updateControls() {
   $('cancel-run').hidden=!state.running;
   $('restart-app').disabled=Boolean(state.running);
   $('run-hint').textContent=realMode()?(!preflightFresh?'Run preflight in Review & validate first.':preflight?.issues.length?'Resolve validation issues before writing to HubSpot.':$('confirmation').value!=='RUN FOR REAL'?'Enter RUN FOR REAL above to enable the migration.':'Ready to create/update contacts and attach every mapped file.'):'Checks every Monday asset without downloading or changing HubSpot.';
+  mondayWorkflow.update(currentStep,{disabled:Boolean(busy),canAdvance:Boolean(workbook)});
+  window.UI.decorate();
 }
 async function startRun(forceDry = false) {
   requestKind='run';await save();if(forceDry)document.querySelector('input[value=dry][name=run-mode]').checked=true;
@@ -572,13 +575,15 @@ function fmtElapsed(startedAt) {
 }
 
 function processState(nextState) {
+  const previous=state;
   state=nextState;
   if(state.preflight&&!dirty&&!validationInvalidated){preflight=state.preflight;preflightFresh=true;renderReview();}
   const entries=state.logs||[];if(entries.length&&entries.at(-1).id<lastLogId)lastLogId=0;
   for(const entry of entries.filter(e=>e.id>lastLogId))activity(entry.message,entry.level,entry.timestamp);
   if(entries.length)lastLogId=entries.at(-1).id;
   if(initialStatus&&state.running)go(3);initialStatus=false;
-  if(state.error)notify(state.error,'error');
+  if(state.error&&state.error!==previous.error)notify(state.error,'error');
+  if(previous.running&&!state.running&&state.phase==='complete')notify(state.dryRun?'Dry preview complete. No HubSpot changes were made.':'Migration complete. Your reports are ready.','success');
   renderResults();renderProgress();updateControls();
   $('technical-summary').textContent=JSON.stringify({phase:state.phase,preflight:state.preflight,results:state.summary},null,2);
 }

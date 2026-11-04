@@ -8,10 +8,14 @@ import { readMapping, writeMapping, mappingSchema } from '../config.js';
 import { readExcel } from '../services/excel.js';
 import { suggestMappings, normalize } from '../services/contactMapping.js';
 import { fail, safeError } from '../lib/sanitize.js';
+import { dashboard } from '../services/dashboard.js';
+import { hubspotMigration } from './hubspotMigration.js';
 export function api(runtime) {
   const router = Router(), { migration, hubspot, root } = runtime;
   const upload = multer({ dest: path.join(root, 'tmp'), limits: { fileSize: 50 * 1024 ** 2, files: 1, fields: 0 } });
   router.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+  router.use('/hubspot', hubspotMigration(runtime));
+  router.get('/dashboard', (req, res) => res.json(dashboard(runtime.state.db)));
   router.get('/config', async (req, res) => {
     const mapping = readMapping(); let columns = [], workbookError = null, workbookSummary = null, previews = {}, savedProgress = null, columnCoverage=[];
     try {
@@ -31,7 +35,7 @@ export function api(runtime) {
         }
       }
     } catch(e) {workbookError=safeError(e);}
-    res.json({mapping,columns,workbookError,workbookSummary,previews,savedProgress,columnCoverage,credentialsConfigured:Boolean(runtime.config.mondayToken&&runtime.config.hubspotToken)});
+    res.json({mapping,columns,workbookError,workbookSummary,previews,savedProgress,columnCoverage,credentialsConfigured:Boolean(runtime.config.mondayToken&&runtime.config.hubspotToken&&runtime.config.hubspotPortalId)});
   });
   router.get('/properties', async (req, res) => { if (!runtime.config.hubspotToken) throw fail('Configure the HubSpot token in .env and restart.'); res.json((await hubspot.properties()).filter(p => p.type === 'string' && p.fieldType === 'file').map(({ name, label }) => ({ name, label }))); });
   router.get('/contact-mapping', async (req, res) => {

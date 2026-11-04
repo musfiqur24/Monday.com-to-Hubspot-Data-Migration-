@@ -43,7 +43,12 @@ export function createApp(rt) {
   });
   app.use(express.json({ limit: "100kb" }));
   app.use("/api", api(rt));
-  app.use(express.static(path.join(rt.root, "public")));
+  app.use("/api", (req, res) => res.status(404).json({
+    error: "This API route is unavailable. Restart the app with npm start and refresh the page.",
+    code: "API_ROUTE_NOT_FOUND",
+  }));
+  app.get("/vendor/lucide.js", (req, res) => res.sendFile(path.join(rt.root, "node_modules/lucide/dist/umd/lucide.min.js")));
+  app.use(express.static(path.join(rt.root, "frontend/public")));
   app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);
     res
@@ -68,8 +73,13 @@ if (
       `\nTRT migration is running\nOpen: http://127.0.0.1:${rt.config.port}\nPress Ctrl+C to stop.\n`,
     );
   });
-  server.on("error", () => {
-    logger.error("Local server could not start. Check PORT.");
+  server.on("error", (error) => {
+    const message = error.code === "EADDRINUSE"
+      ? `Port ${rt.config.port} is already in use. Stop the existing app instance before running npm start, or choose another PORT in .env.`
+      : error.code === "EACCES"
+        ? `Access to port ${rt.config.port} was denied. Choose another PORT in .env.`
+        : `Local server could not start (${error.code || "UNKNOWN"}). Check the configured PORT.`;
+    logger.error({ code: error.code, port: rt.config.port }, message);
     rt.state.close();
     process.exitCode = 1;
   });

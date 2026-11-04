@@ -2,6 +2,7 @@ import { openAsBlob } from "node:fs";
 import { jsonRequest } from "../lib/http.js";
 import { TokenBucket } from "../lib/rateLimiter.js";
 import { fail, safeError } from "../lib/sanitize.js";
+import { HubspotPortal } from "./hubspotPortal.js";
 
 // HubSpot batch limits
 const BATCH_UPSERT_MAX = 100; // batch/upsert contacts
@@ -19,6 +20,8 @@ function chunks(arr, size) {
 export class HubSpot {
   constructor(config, throttle = () => {}) {
     this.config = config;
+    this.portal = new HubspotPortal(this);
+    this.portalVerification = null;
     this.throttle = throttle;
     // Standard limiter: 10 req/s burst cap
     this.limiter = new TokenBucket(10, 10);
@@ -31,6 +34,8 @@ export class HubSpot {
     route,
     { method = "GET", body, attempts, multipart = false, timeout } = {},
   ) {
+    if (!route.includes('/2026-09/')) throw fail('An unsupported HubSpot API version was requested. This app requires 2026-09.');
+    if (route !== '/account-info/2026-09/details') await this.verifyPortal();
     return jsonRequest(`https://api.hubapi.com${route}`, {
       method,
       headers: {
@@ -45,9 +50,21 @@ export class HubSpot {
     });
   }
 
+  async verifyPortal() {
+    if (!this.config.hubspotToken) throw fail('Configure HUBSPOT_PRIVATE_APP_TOKEN in .env and restart.');
+    if (!this.config.hubspotPortalId || !/^\d+$/.test(this.config.hubspotPortalId)) throw fail('Set a numeric HUBSPOT_PORTAL_ID in .env and restart.');
+    if (!this.portalVerification) {
+      this.portalVerification = this.request('/account-info/2026-09/details').then(account => {
+        if (String(account.portalId) !== this.config.hubspotPortalId) throw fail('HUBSPOT_PORTAL_ID does not match the private app token account. Correct .env and restart before migrating.');
+        return account;
+      }).catch(error => { this.portalVerification=null; throw error; });
+    }
+    return this.portalVerification;
+  }
+
   /* ─── diagnostics ────────────────────────────────────────────────────────── */
   async check() {
-    return this.request("/crm/v3/objects/contacts?limit=1&properties=email");
+    return this.request("/crm/objects/2026-09/contacts?limit=1&properties=email");
   }
 
   /* ─── properties ─────────────────────────────────────────────────────────── */
@@ -56,7 +73,7 @@ export class HubSpot {
     let after;
     do {
       const url =
-        "/crm/v3/properties/contacts" + (after ? `?after=${encodeURIComponent(after)}` : "");
+        "/crm/properties/2026-09/contacts" + (after ? `?after=${encodeURIComponent(after)}` : "");
       const res = await this.request(url);
       all.push(...(res.results || []));
       after = res.paging?.next?.after;
@@ -66,7 +83,7 @@ export class HubSpot {
   async property(name) {
     try {
       return await this.request(
-        `/crm/v3/properties/contacts/${encodeURIComponent(name)}`,
+        `/crm/properties/2026-09/contacts/${encodeURIComponent(name)}`,
       );
     } catch (e) {
       if (e.status === 404) return null;
@@ -86,7 +103,7 @@ export class HubSpot {
     for (const slice of chunks(propertyDefs, BATCH_PROP_MAX)) {
       let res;
       try {
-        res = await this.request("/crm/v3/properties/contacts/batch/create", {
+        res = await this.request("/crm/properties/2026-09/contacts/batch/create", {
           method: "POST",
           attempts: 1,
           body: { inputs: slice },
@@ -108,7 +125,7 @@ export class HubSpot {
   /** Single property create with lost-response reconciliation (kept for fallback). */
   async createProperty(property) {
     try {
-      return await this.request("/crm/v3/properties/contacts", {
+      return await this.request("/crm/properties/2026-09/contacts", {
         method: "POST",
         attempts: 1,
         body: property,
@@ -129,7 +146,7 @@ export class HubSpot {
   /** Search a single contact by email. Returns HubSpot ID string or null. */
   async contact(email) {
     await this.searchLimiter.take();
-    const result = await this.request("/crm/v3/objects/contacts/search", {
+    const result = await this.request("/crm/objects/2026-09/contacts/search", {
       method: "POST",
       body: {
         filterGroups: [
@@ -150,7 +167,7 @@ export class HubSpot {
     try {
       return (
         await this.request(
-          `/crm/v3/objects/contacts/${encodeURIComponent(email)}?idProperty=email&properties=email`,
+          `/crm/objects/2026-09/contacts/${encodeURIComponent(email)}?idProperty=email&properties=email`,
         )
       ).id;
     } catch (error) {
@@ -162,7 +179,7 @@ export class HubSpot {
   async contactRecord(id, archived = false) {
     try {
       return await this.request(
-        `/crm/v3/objects/contacts/${encodeURIComponent(id)}?properties=email${archived ? "&archived=true" : ""}`,
+        `/crm/objects/2026-09/contacts/${encodeURIComponent(id)}?properties=email${archived ? "&archived=true" : ""}`,
       );
     } catch (error) {
       if (error.status === 404) return null;
@@ -171,7 +188,7 @@ export class HubSpot {
   }
 
   async createContact(properties) {
-    return this.request("/crm/v3/objects/contacts", {
+    return this.request("/crm/objects/2026-09/contacts", {
       method: "POST",
       attempts: 1,
       body: { properties },
@@ -180,11 +197,11 @@ export class HubSpot {
 
   async patch(contact, properties) {
     await this.request(
-      `/crm/v3/objects/contacts/${encodeURIComponent(contact)}`,
+      `/crm/objects/2026-09/contacts/${encodeURIComponent(contact)}`,
       { method: "PATCH", body: { properties } },
     );
     const result = await this.request(
-      `/crm/v3/objects/contacts/${encodeURIComponent(contact)}?properties=${encodeURIComponent(Object.keys(properties).join(","))}`,
+      `/crm/objects/2026-09/contacts/${encodeURIComponent(contact)}?properties=${encodeURIComponent(Object.keys(properties).join(","))}`,
     );
     if (
       Object.entries(properties).some(
@@ -206,7 +223,7 @@ export class HubSpot {
     const map = new Map(emails.map((e) => [e.toLowerCase().trim(), null]));
     for (const slice of chunks([...map.keys()], BATCH_READ_MAX)) {
       try {
-        const res = await this.request("/crm/v3/objects/contacts/batch/read", {
+        const res = await this.request("/crm/objects/2026-09/contacts/batch/read", {
           method: "POST",
           body: {
             idProperty: "email",
@@ -237,7 +254,7 @@ export class HubSpot {
     const results = [];
     for (const slice of chunks(inputs, BATCH_UPSERT_MAX)) {
       try {
-        const res = await this.request("/crm/v3/objects/contacts/batch/upsert", {
+        const res = await this.request("/crm/objects/2026-09/contacts/batch/upsert", {
           method: "POST",
           body: {
             inputs: slice.map(({ email, properties }) => ({
@@ -261,7 +278,7 @@ export class HubSpot {
         if (error.status && error.status < 500 && slice.length > 1) {
           for (const item of slice) {
             try {
-              const singleRes = await this.request("/crm/v3/objects/contacts/batch/upsert", {
+              const singleRes = await this.request("/crm/objects/2026-09/contacts/batch/upsert", {
                 method: "POST",
                 body: {
                   inputs: [{
@@ -306,7 +323,7 @@ export class HubSpot {
     const results = [];
     for (const slice of chunks(inputs, BATCH_UPSERT_MAX)) {
       try {
-        const res = await this.request("/crm/v3/objects/contacts/batch/update", {
+        const res = await this.request("/crm/objects/2026-09/contacts/batch/update", {
           method: "POST",
           body: {
             inputs: slice.map(({ id, properties }) => ({
@@ -323,7 +340,7 @@ export class HubSpot {
         if (error.status && error.status < 500 && slice.length > 1) {
           for (const item of slice) {
             try {
-              const singleRes = await this.request("/crm/v3/objects/contacts/batch/update", {
+              const singleRes = await this.request("/crm/objects/2026-09/contacts/batch/update", {
                 method: "POST",
                 body: {
                   inputs: [{
@@ -355,7 +372,7 @@ export class HubSpot {
   async batchReadContacts(ids, propertyNames) {
     const map = new Map();
     for (const slice of chunks(ids, BATCH_READ_MAX)) {
-      const res = await this.request("/crm/v3/objects/contacts/batch/read", {
+      const res = await this.request("/crm/objects/2026-09/contacts/batch/read", {
         method: "POST",
         body: {
           inputs: slice.map((id) => ({ id })),
@@ -385,7 +402,7 @@ export class HubSpot {
             duplicationValidationScope: "EXACT_FOLDER",
           }),
         );
-        return await this.request("/files/v3/files", {
+        return await this.request("/files/2026-09/files", {
           method: "POST",
           body: form,
           multipart: true,
@@ -406,17 +423,17 @@ export class HubSpot {
   }
 
   async file(id) {
-    return this.request(`/files/v3/files/${encodeURIComponent(id)}`);
+    return this.request(`/files/2026-09/files/${encodeURIComponent(id)}`);
   }
   async signedFile(id) {
-    return this.request(`/files/v3/files/${encodeURIComponent(id)}/signed-url`);
+    return this.request(`/files/2026-09/files/${encodeURIComponent(id)}/signed-url`);
   }
 
   /* ─── notes ──────────────────────────────────────────────────────────────── */
 
   /** Create a single note (kept for single-contact fallback). */
   async note(contact, ids, marker) {
-    return this.request("/crm/v3/objects/notes", {
+    return this.request("/crm/objects/2026-09/notes", {
       method: "POST",
       attempts: 1,
       body: {
@@ -448,7 +465,7 @@ export class HubSpot {
   async batchCreateNotes(inputs) {
     const results = [];
     for (const slice of chunks(inputs, BATCH_NOTE_MAX)) {
-      const res = await this.request("/crm/v3/objects/notes/batch/create", {
+      const res = await this.request("/crm/objects/2026-09/notes/batch/create", {
         method: "POST",
         attempts: 1,
         body: {
@@ -492,7 +509,7 @@ export class HubSpot {
   async batchReadNotes(ids) {
     const map = new Map();
     for (const slice of chunks(ids, BATCH_READ_MAX)) {
-      const res = await this.request("/crm/v3/objects/notes/batch/read", {
+      const res = await this.request("/crm/objects/2026-09/notes/batch/read", {
         method: "POST",
         body: {
           inputs: slice.map((id) => ({ id })),
@@ -507,7 +524,7 @@ export class HubSpot {
 
   async verifyNote(id, contact, ids) {
     const note = await this.request(
-      `/crm/v3/objects/notes/${encodeURIComponent(id)}?properties=hs_attachment_ids&associations=contacts`,
+      `/crm/objects/2026-09/notes/${encodeURIComponent(id)}?properties=hs_attachment_ids&associations=contacts`,
     );
     if (
       note.properties.hs_attachment_ids !== ids.join(";") ||

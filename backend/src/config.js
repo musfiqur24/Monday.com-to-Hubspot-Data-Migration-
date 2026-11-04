@@ -79,6 +79,7 @@ export function settings() {
     mondayToken: process.env.MONDAY_API_TOKEN,
     mondayVersion: process.env.MONDAY_API_VERSION || "2026-07",
     hubspotToken: process.env.HUBSPOT_PRIVATE_APP_TOKEN,
+    hubspotPortalId: process.env.HUBSPOT_PORTAL_ID?.trim(),
     baseFolder: process.env.HUBSPOT_BASE_FOLDER || "/Monday Migration",
     port: positive("PORT", 3000, 65535),
     concurrency: positive("CONCURRENCY", 3, 20),

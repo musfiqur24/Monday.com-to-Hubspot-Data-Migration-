@@ -29,6 +29,7 @@ export async function jsonRequest(url, { limiter, onThrottle, attempts = 5, time
       const error = fail(`${service} API request failed (HTTP ${response.status}).${response.status === 401 ? ` Check the ${service === 'Monday' ? 'MONDAY_API_TOKEN' : 'HUBSPOT_PRIVATE_APP_TOKEN'} value in .env and restart the app.` : ''}`);
       Object.assign(error, { status: response.status, retryable: response.status === 429 || response.status >= 500, retryAfter: response.headers.get('retry-after'), errorDetail }); throw error;
     }
+    if (response.status === 204) return null;
     return response.json();
   }, { onThrottle, attempts });
 }
