@@ -1,0 +1,428 @@
+{
+  "emailColumn": "Email",
+  "nameColumn": "Name",
+  "sheet": "client",
+  "contactMode": "upsert",
+  "propertyMappings": [
+    {
+      "excel": "Name",
+      "hubspotProperty": "full_name",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Name",
+      "valueMap": {}
+    },
+    {
+      "excel": "Subitems",
+      "hubspotProperty": "",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Subitems",
+      "valueMap": {}
+    },
+    {
+      "excel": "Type",
+      "hubspotProperty": "type",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Type",
+      "valueMap": {}
+    },
+    {
+      "excel": "Subscription",
+      "hubspotProperty": "subscription",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Subscription",
+      "valueMap": {
+        "12 MONTH $650": "12 Month",
+        "12 Month": "12 Month",
+        "6 Month": "6 Month",
+        "3 Month": "3 Month"
+      }
+    },
+    {
+      "excel": "Dose Per week",
+      "hubspotProperty": "dose_per_week",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Dose Per week",
+      "valueMap": {}
+    },
+    {
+      "excel": "Value",
+      "hubspotProperty": "amount",
+      "createIfMissing": false,
+      "type": "number",
+      "fieldType": "number",
+      "label": "Value",
+      "valueMap": {}
+    },
+    {
+      "excel": "Important Profile Notes:",
+      "hubspotProperty": "important_profile_notes_",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Important Profile Notes:",
+      "valueMap": {}
+    },
+    {
+      "excel": "Phone",
+      "hubspotProperty": "phone",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Phone",
+      "valueMap": {}
+    },
+    {
+      "excel": "Date of Birth",
+      "hubspotProperty": "date_of_birth",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Date of Birth",
+      "valueMap": {}
+    },
+    {
+      "excel": "Address",
+      "hubspotProperty": "address",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Address",
+      "valueMap": {}
+    },
+    {
+      "excel": "Suburb",
+      "hubspotProperty": "suburb",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Suburb",
+      "valueMap": {}
+    },
+    {
+      "excel": "State",
+      "hubspotProperty": "state",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "State",
+      "valueMap": {}
+    },
+    {
+      "excel": "Post code",
+      "hubspotProperty": "zip",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Post code",
+      "valueMap": {}
+    },
+    {
+      "excel": "Medicare Number",
+      "hubspotProperty": "medicare_number",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Medicare Number",
+      "valueMap": {}
+    },
+    {
+      "excel": "Line Number",
+      "hubspotProperty": "irn",
+      "createIfMissing": false,
+      "type": "number",
+      "fieldType": "number",
+      "label": "Line Number",
+      "valueMap": {}
+    },
+    {
+      "excel": "Medicare Expiry Date",
+      "hubspotProperty": "medicare_expiry_date___text",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Medicare Expiry Date",
+      "valueMap": {}
+    },
+    {
+      "excel": "Most Recent Blood work",
+      "hubspotProperty": "most_recent_blood_work",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Most Recent Blood work",
+      "valueMap": {}
+    },
+    {
+      "excel": "Blood Work Due",
+      "hubspotProperty": "",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Blood Work Due",
+      "valueMap": {}
+    },
+    {
+      "excel": "Bloodwork Off Set",
+      "hubspotProperty": "blood_work_offset",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Bloodwork Off Set",
+      "valueMap": {}
+    },
+    {
+      "excel": "Prescription Start Date",
+      "hubspotProperty": "prescription_start_date",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Prescription Start Date",
+      "valueMap": {}
+    },
+    {
+      "excel": "Prescription End Date",
+      "hubspotProperty": "",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Prescription End Date",
+      "valueMap": {}
+    },
+    {
+      "excel": "Prescription Off Set",
+      "hubspotProperty": "prescription_offset",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Prescription Off Set",
+      "valueMap": {}
+    },
+    {
+      "excel": "Prescription Token",
+      "hubspotProperty": "prescription_token",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Prescription Token",
+      "valueMap": {}
+    },
+    {
+      "excel": "Medication Dispense Date",
+      "hubspotProperty": "medication_dispense_date",
+      "createIfMissing": false,
+      "type": "date",
+      "fieldType": "date",
+      "label": "Medication Dispense Date",
+      "valueMap": {}
+    },
+    {
+      "excel": "Medication Resupply Due",
+      "hubspotProperty": "monday_medication_history_json",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Medication Resupply Due",
+      "valueMap": {}
+    },
+    {
+      "excel": "Medical Resupply Off Set",
+      "hubspotProperty": "medication_resupply_offset",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Medical Resupply Off Set",
+      "valueMap": {}
+    },
+    {
+      "excel": "Prescribed Medication",
+      "hubspotProperty": "prescribed_medication",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Prescribed Medication",
+      "valueMap": {}
+    },
+    {
+      "excel": "Latest Medication Tracking Number",
+      "hubspotProperty": "latest_medication_tracking_number",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Latest Medication Tracking Number",
+      "valueMap": {}
+    },
+    {
+      "excel": "Subscription start date",
+      "hubspotProperty": "subscription_start_date",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Subscription start date",
+      "valueMap": {}
+    },
+    {
+      "excel": "Subscription End Date",
+      "hubspotProperty": "",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Subscription End Date",
+      "valueMap": {}
+    },
+    {
+      "excel": "Subscription Off Set",
+      "hubspotProperty": "subscription_offset",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Subscription Off Set",
+      "valueMap": {}
+    },
+    {
+      "excel": "Current Medical Conditions",
+      "hubspotProperty": "current_medical_condition",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Current Medical Conditions",
+      "valueMap": {}
+    },
+    {
+      "excel": "Current Medications",
+      "hubspotProperty": "current_medication",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Current Medications",
+      "valueMap": {}
+    },
+    {
+      "excel": "Allergies",
+      "hubspotProperty": "allergies",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Allergies",
+      "valueMap": {}
+    },
+    {
+      "excel": "Injection Frequency Per Week (Recommended)",
+      "hubspotProperty": "prescribed_injection_frequency_per_week",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Injection Frequency Per Week (Recommended)",
+      "valueMap": {}
+    },
+    {
+      "excel": "Doctors Comments",
+      "hubspotProperty": "doctors_comment",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Doctors Comments",
+      "valueMap": {}
+    },
+    {
+      "excel": "Who Approved",
+      "hubspotProperty": "approved_by",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Who Approved",
+      "valueMap": {}
+    },
+    {
+      "excel": "Total Testosterone",
+      "hubspotProperty": "total_testosterone",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Total Testosterone",
+      "valueMap": {}
+    },
+    {
+      "excel": "Free Testosterone",
+      "hubspotProperty": "free_testosterone",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Free Testosterone",
+      "valueMap": {}
+    },
+    {
+      "excel": "SHBG",
+      "hubspotProperty": "shbg",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "SHBG",
+      "valueMap": {}
+    },
+    {
+      "excel": "Estradiol (E2)",
+      "hubspotProperty": "estradiol_e2",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Estradiol (E2)",
+      "valueMap": {}
+    },
+    {
+      "excel": "Initial Doctors Notes",
+      "hubspotProperty": "",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Initial Doctors Notes",
+      "valueMap": {}
+    },
+    {
+      "excel": "Referral",
+      "hubspotProperty": "have_a_referral",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Referral",
+      "valueMap": {}
+    },
+    {
+      "excel": "Primary Medication",
+      "hubspotProperty": "primary_medication",
+      "createIfMissing": false,
+      "type": "string",
+      "fieldType": "textarea",
+      "label": "Primary Medication",
+      "valueMap": {}
+    }
+  ],
+  "noteSetFirst": true,
+  "numberedFallback": "note",
+  "columns": [
+    {
+      "excel": "Medicare Photo",
+      "hubspotProperty": "medicare_photo",
+      "multiFileStrategy": "same_property"
+    },
+    {
+      "excel": "Bloodwork/files",
+      "hubspotProperty": "bloodwork_files_url",
+      "multiFileStrategy": "same_property"
+    },
+    {
+      "excel": "ERX/Scripts",
+      "hubspotProperty": "prescription_erx_file",
+      "multiFileStrategy": "same_property"
+    }
+  ]
+}

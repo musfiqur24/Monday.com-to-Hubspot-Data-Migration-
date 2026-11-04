@@ -1,0 +1,23 @@
+node_modules/
+.env
+.env.*
+!.env.example
+data/
+tmp/
+temp/
+reports/
+state/
+*.sqlite*
+*.db*
+*.log
+
+# Local source workbooks and exported customer reports
+*.xlsx
+*.xls
+*.csv
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
