@@ -9,6 +9,8 @@ export function Topbar({ activeModule, isConnected }) {
         return 'HubSpot / Association Migration';
       case 'monday':
         return 'Monday to HubSpot';
+      case 'history':
+        return 'Migration History';
       case 'dashboard':
       default:
         return 'Dashboard';

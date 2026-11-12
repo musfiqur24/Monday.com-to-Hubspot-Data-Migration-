@@ -6,6 +6,7 @@ import { Dashboard } from './pages/Dashboard.jsx'
 import { DataMigrate } from './pages/hubspot/DataMigrate.jsx'
 import { AssociationMigration } from './pages/hubspot/AssociationMigration.jsx'
 import { MondayMigration } from './pages/monday/MondayMigration.jsx'
+import { MigrationHistory } from './pages/MigrationHistory.jsx'
 
 function AppInner() {
   const { showToast } = useToast();
@@ -65,6 +66,9 @@ function AppInner() {
         return <AssociationMigration key={activeModule} onShowToast={showToast} />;
       case 'monday':
         return <MondayMigration key={activeModule} onShowToast={showToast} initialStep={mondayStep} onStepChange={setMondayStep} />;
+      case 'history':
+        return <MigrationHistory key={activeModule} onShowToast={showToast} />;
+      case 'dashboard':
       default:
         return <Dashboard key={activeModule} onShowToast={showToast} />;
     }

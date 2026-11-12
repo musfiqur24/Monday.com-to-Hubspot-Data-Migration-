@@ -639,7 +639,7 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="py-6 px-8 max-w-5xl">
+    <div className="py-6 px-8 w-full max-w-[1500px]">
       <LoadingOverlay show={busy} title={busyMsg} sub={busySub} />
 
       <h1 className="text-[1.9rem] font-black text-slate-900 leading-tight mb-1">

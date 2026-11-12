@@ -49,6 +49,15 @@ export function createApp(rt) {
     next();
   });
   app.use(express.json({ limit: "100kb" }));
+  app.use("/api", (req, res, next) => {
+    if (req.path === "/progress" || req.path === "/status") return next();
+    const start = Date.now();
+    res.on("finish", () => {
+      const ms = Date.now() - start;
+      logger.info(`${req.originalUrl} -> ${res.statusCode} (${ms}ms)`, { method: req.method });
+    });
+    next();
+  });
   app.use("/api", api(rt));
   app.use("/api", (req, res) => res.status(404).json({
     error: "This API route is unavailable. Restart the app with npm start and refresh the page.",

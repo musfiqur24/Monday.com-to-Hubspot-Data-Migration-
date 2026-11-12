@@ -928,8 +928,8 @@ export function AssociationMigration({ onShowToast }) {
       <LoadingOverlay show={busy && !state.status?.running} title="Working…" sub="Please wait" />
 
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 px-6 py-5">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
+      <div className="bg-white border-b border-slate-200 px-8 py-5">
+        <div className="w-full max-w-[1500px] flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-[#ff7a59]/10 flex items-center justify-center">
               <Link2 size={18} className="text-[#ff7a59]" />
@@ -945,7 +945,7 @@ export function AssociationMigration({ onShowToast }) {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-6 flex flex-col gap-6">
+      <div className="w-full max-w-[1500px] px-8 py-6 flex flex-col gap-6">
         {/* Stepper */}
         <StepperBar
           steps={STEPS}

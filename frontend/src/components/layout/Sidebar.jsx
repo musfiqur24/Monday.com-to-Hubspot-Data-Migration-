@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutGrid, ChevronRight } from 'lucide-react';
+import { LayoutGrid, ChevronRight, History } from 'lucide-react';
 
 export function Sidebar({ activeModule, onSelectModule, mondayStep, onSelectMondayStep }) {
   const [hubspotOpen, setHubspotOpen] = useState(
@@ -30,6 +30,19 @@ export function Sidebar({ activeModule, onSelectModule, mondayStep, onSelectMond
       >
         <span className="text-base leading-none text-slate-500 shrink-0">&#9638;</span>
         <span>Dashboard</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => onSelectModule('history')}
+        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-semibold transition cursor-pointer border-0 text-left mt-1 ${
+          activeModule === 'history'
+            ? 'bg-[#fff0eb] text-[#df6d50]'
+            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 bg-transparent'
+        }`}
+      >
+        <History className="w-4 h-4 text-slate-500 shrink-0" />
+        <span>Migration History</span>
       </button>
 
       <div className="text-[10px] font-bold tracking-widest text-slate-400 px-3 mt-6 mb-2 select-none">

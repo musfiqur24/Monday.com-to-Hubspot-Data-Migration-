@@ -10,6 +10,7 @@ import { suggestMappings, normalize } from '../services/contactMapping.js';
 import { fail, safeError } from '../lib/sanitize.js';
 import { dashboard } from '../services/dashboard.js';
 import { hubspotMigration } from './hubspotMigration.js';
+import { logger } from '../lib/logger.js';
 export function api(runtime) {
   const router = Router(), { migration, hubspot, root } = runtime;
   const upload = multer({ dest: path.join(root, 'tmp'), limits: { fileSize: 50 * 1024 ** 2, files: 1, fields: 0 } });
@@ -135,5 +136,149 @@ export function api(runtime) {
     if (!report) { const reports = (await fs.readdir(path.join(root,'reports'))).filter(n => /^contacts-[\dTZ-]+\.csv$/.test(n)).sort(); if (reports.length) report = path.join(root,'reports',reports.at(-1)); }
     if (!report) return res.status(404).json({error:'No contact report yet.'}); res.download(report);
   });
+  router.get('/history', async (req, res) => {
+    try {
+      const reportsDir = path.join(root, 'reports');
+      let files = [];
+      try {
+        files = await fs.readdir(reportsDir);
+      } catch {
+        files = [];
+      }
+
+      const historyRuns = await Promise.all(
+        files
+          .filter(f => f.endsWith('.csv') || f.endsWith('.json'))
+          .map(async (filename) => {
+            const filepath = path.join(reportsDir, filename);
+            const stats = await fs.stat(filepath);
+            let module = 'Monday to HubSpot';
+            let type = 'File Migration';
+            let timestamp = stats.mtime;
+
+            if (filename.startsWith('contacts-')) {
+              type = 'Contacts Report';
+              const match = filename.match(/contacts-(.+)\.csv/);
+              if (match) {
+                const dateStr = match[1].replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/, 'T$1:$2:$3.$4Z');
+                const parsed = new Date(dateStr);
+                if (!isNaN(parsed.getTime())) timestamp = parsed;
+              }
+            } else if (filename.startsWith('migration-')) {
+              type = 'Asset / File Migration';
+              const match = filename.match(/migration-(.+)\.csv/);
+              if (match) {
+                const dateStr = match[1].replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/, 'T$1:$2:$3.$4Z');
+                const parsed = new Date(dateStr);
+                if (!isNaN(parsed.getTime())) timestamp = parsed;
+              }
+            } else if (filename.startsWith('hubspot-data-migrate-')) {
+              module = 'HubSpot Data Migrate';
+              type = 'Results CSV';
+            } else if (filename.startsWith('validation-issues')) {
+              module = 'HubSpot Validation';
+              type = 'Issues Report';
+            }
+
+            return {
+              filename,
+              module,
+              type,
+              size: stats.size,
+              createdAt: timestamp.toISOString(),
+            };
+          })
+      );
+
+      historyRuns.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      const db = runtime.state.db;
+      const count = (sql) => {
+        try { return db.prepare(sql).get()?.total ?? 0; } catch { return 0; }
+      };
+
+      const totalContacts = count("SELECT COUNT(*) total FROM contacts WHERE status='completed'");
+      const totalFiles = count("SELECT COUNT(*) total FROM files WHERE status='completed'");
+      const failedContacts = count("SELECT COUNT(*) total FROM contacts WHERE status IN ('failed','uncertain')");
+      const failedFiles = count("SELECT COUNT(*) total FROM files WHERE status IN ('failed','upload_uncertain')");
+
+      let recentEvents = [];
+      try {
+        recentEvents = db.prepare(
+          "SELECT id, row_email, column_name, step, created_at FROM events ORDER BY id DESC LIMIT 50"
+        ).all();
+      } catch {
+        recentEvents = [];
+      }
+
+      res.json({
+        summary: {
+          totalRuns: historyRuns.length,
+          totalContacts,
+          totalFiles,
+          failedItems: failedContacts + failedFiles,
+          latestRun: historyRuns[0]?.createdAt ?? null,
+        },
+        runs: historyRuns,
+        recentEvents,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+  router.get('/history/download', async (req, res) => {
+    const filename = req.query.file;
+    if (!filename || filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+    const filepath = path.join(root, 'reports', filename);
+    try {
+      await fs.access(filepath);
+      res.download(filepath, filename);
+    } catch {
+      res.status(404).json({ error: 'Report file not found' });
+    }
+  });
+
+  // DELETE single report file
+  router.delete('/history/delete', async (req, res) => {
+    const filename = req.query.file;
+    if (!filename || filename.includes('..') || /[/\\]/.test(filename)) {
+      logger.warn(`[Delete History] Rejected invalid filename: ${filename}`, { method: req.method });
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+    const filepath = path.join(root, 'reports', filename);
+    try {
+      await fs.unlink(filepath);
+      logger.info(`[Delete History] Successfully deleted report: ${filename}`, { method: req.method });
+      res.json({ ok: true, filename });
+    } catch (err) {
+      logger.error(`[Delete History] Failed to delete report ${filename}: ${err.message}`, { method: req.method });
+      res.status(404).json({ error: 'File not found' });
+    }
+  });
+
+  // DELETE multiple report files
+  router.post('/history/delete-many', async (req, res) => {
+    const { filenames } = req.body || {};
+    if (!Array.isArray(filenames) || filenames.length === 0) {
+      logger.warn('[Delete History] Bulk delete request missing filenames array', { method: req.method });
+      return res.status(400).json({ error: 'filenames array required' });
+    }
+    const invalid = filenames.find(f => !f || f.includes('..') || /[/\\]/.test(f));
+    if (invalid) {
+      logger.warn(`[Delete History] Invalid filename in bulk delete: ${invalid}`, { method: req.method });
+      return res.status(400).json({ error: 'Invalid filename in list' });
+    }
+    logger.info(`[Delete History] Initiating bulk deletion for ${filenames.length} report files`, { method: req.method });
+    const results = await Promise.allSettled(
+      filenames.map(f => fs.unlink(path.join(root, 'reports', f)))
+    );
+    const deleted = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.length - deleted;
+    logger.info(`[Delete History] Bulk delete finished: ${deleted} deleted, ${failed} failed`, { method: req.method });
+    res.json({ deleted, failed });
+  });
+
   return router;
 }

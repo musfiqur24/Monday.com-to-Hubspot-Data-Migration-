@@ -81,20 +81,20 @@ function DonutChart({ objects = [], total = 0 }) {
   });
   const gradient = `conic-gradient(${stops.join(',')})`;
   return (
-    <div className="flex items-center gap-6">
+    <div className="flex flex-col sm:flex-row items-center justify-around gap-6 py-2">
       <div
-        className="w-40 h-40 shrink-0 rounded-full flex items-center justify-center relative"
+        className="w-40 h-40 shrink-0 rounded-full flex items-center justify-center relative shadow-xs"
         style={{ background: gradient }}
         aria-label={objects.map(([n, c]) => `${n}: ${c}`).join(', ')}
       >
-        <div className="w-28 h-28 rounded-full bg-white flex flex-col items-center justify-center shadow-sm">
+        <div className="w-28 h-28 rounded-full bg-white flex flex-col items-center justify-center shadow-xs">
           <strong className="text-[22px] font-bold text-slate-900 leading-none">{num(total)}</strong>
           <span className="text-[11px] text-slate-400 mt-0.5">records migrated</span>
         </div>
       </div>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 min-w-[130px]">
         {objects.map(([name, count], i) => (
-          <div key={name} className="flex items-center justify-between gap-6 text-[12px]">
+          <div key={name} className="flex items-center justify-between gap-4 text-[12px]">
             <span className="flex items-center gap-2 text-slate-700">
               <i className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color(i) }} />
               {name}
@@ -134,7 +134,7 @@ export function Dashboard({ onShowToast }) {
   const objects = data ? data.objects.map((o) => [o.name, o.count, o.source]) : [];
 
   return (
-    <div className="py-6 px-8 max-w-6xl">
+    <div className="py-6 px-8 w-full max-w-[1700px]">
       <LoadingOverlay show={loading && !data} title="Loading dashboard…" sub="Fetching migration data" />
 
       <div className="flex items-start justify-between mb-6">
@@ -149,7 +149,7 @@ export function Dashboard({ onShowToast }) {
           type="button"
           onClick={() => refresh({ notifySuccess: true })}
           disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-[13px] font-medium text-slate-600 hover:bg-slate-50 transition disabled:opacity-50 cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-[13px] font-medium text-slate-600 hover:bg-slate-50 transition disabled:opacity-50 cursor-pointer shadow-xs"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
@@ -165,7 +165,7 @@ export function Dashboard({ onShowToast }) {
       </div>
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 mb-4">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_390px] gap-4 mb-4">
         <article className="bg-white border border-slate-200 rounded-2xl p-6">
           <div className="flex items-start justify-between mb-1">
             <div>
@@ -186,10 +186,13 @@ export function Dashboard({ onShowToast }) {
           <p className="text-[11px] text-slate-400 mt-2">Monday contacts use their latest completion; HubSpot records and files use their first completed migration.</p>
         </article>
 
-        <article className="bg-white border border-slate-200 rounded-2xl p-6 w-full lg:w-[320px] shrink-0">
-          <h2 className="font-bold text-slate-800 text-[15px] mb-0.5">Migrated by object</h2>
-          <p className="text-[12px] text-slate-400 mb-5">Successfully completed records</p>
+        <article className="bg-white border border-slate-200 rounded-2xl p-6 w-full flex flex-col justify-between">
+          <div>
+            <h2 className="font-bold text-slate-800 text-[15px] mb-0.5">Migrated by object</h2>
+            <p className="text-[12px] text-slate-400 mb-5">Successfully completed records</p>
+          </div>
           <DonutChart objects={objects} total={data?.total ?? 0} />
+          <div />
         </article>
       </div>
 
