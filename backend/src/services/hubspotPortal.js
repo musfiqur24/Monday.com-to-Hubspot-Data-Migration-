@@ -41,8 +41,8 @@ export class HubspotPortal {
   async discover() {
     const portal=await this.identity(), warnings=[];
     const [enablement,schemas]=await Promise.allSettled([
-      this.hubspot.request('/crm/object-library/2026-09/enablement'),
-      this.hubspot.request('/crm-object-schemas/2026-09/schemas'),
+      this.hubspot.request('/crm/object-library/2026-09/enablement', { silent: true }),
+      this.hubspot.request('/crm-object-schemas/2026-09/schemas', { silent: true }),
     ]);
     for(const [name,result]of [['activated objects',enablement],['custom schemas',schemas]]) {
       if(result.status==='rejected') {
@@ -63,7 +63,7 @@ export class HubspotPortal {
     const unavailable=[];
     const accessible=await Promise.all([...candidates.values()].map(async object=>{
       try {
-        await this.hubspot.request(`/crm/properties/2026-09/${encodeURIComponent(object.objectTypeId)}`);
+        await this.hubspot.request(`/crm/properties/2026-09/${encodeURIComponent(object.objectTypeId)}`, { silent: true });
         return object;
       } catch(error) {
         if(error.status===403){unavailable.push(object.label);return null;}

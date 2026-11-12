@@ -32,7 +32,7 @@ export class HubSpot {
   /* ─── low-level ─────────────────────────────────────────────────────────── */
   async request(
     route,
-    { method = "GET", body, attempts, multipart = false, timeout } = {},
+    { method = "GET", body, attempts, multipart = false, timeout, silent = false } = {},
   ) {
     if (!route.includes('/2026-09/')) throw fail('An unsupported HubSpot API version was requested. This app requires 2026-09.');
     if (route !== '/account-info/2026-09/details') await this.verifyPortal();
@@ -47,6 +47,7 @@ export class HubSpot {
       onThrottle: this.throttle,
       attempts,
       timeout,
+      silent,
     });
   }
 

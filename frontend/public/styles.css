@@ -33,7 +33,7 @@ progress.sub-progress::-webkit-progress-value{background:#36c48b;border-radius:1
 .prop-select-trigger[aria-expanded="true"] .prop-arrow{transform:rotate(180deg);color:#00a4bd}
 
 /* Global Floating Dropdown Panel */
-#global-prop-picker.prop-dropdown-panel{
+.prop-dropdown-panel, #global-prop-picker.prop-dropdown-panel{
   position:fixed!important;
   background:#ffffff;
   border:1px solid #cbd6e2;

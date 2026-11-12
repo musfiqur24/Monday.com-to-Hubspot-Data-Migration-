@@ -1,6 +1,7 @@
 import express from "express";
 import helmet from "helmet";
 import path from "node:path";
+import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import { Agent, setGlobalDispatcher } from "undici";
 import { api } from "./routes/api.js";
@@ -24,18 +25,24 @@ export function createApp(rt) {
   app.use(
     helmet({
       contentSecurityPolicy: {
-        directives: { "upgrade-insecure-requests": null },
+        directives: {
+          "upgrade-insecure-requests": null,
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.tailwindcss.com"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+          imgSrc: ["'self'", "data:", "blob:"],
+          connectSrc: ["'self'"],
+          workerSrc: ["'self'", "blob:"],
+        },
       },
     }),
   );
   app.use((req, res, next) => {
     // Reject DNS rebinding and cross-origin browser requests, including form POSTs.
-    const expected = `127.0.0.1:${rt.config.port}`;
-    if (
-      req.headers.host !== expected ||
-      (req.headers.origin && req.headers.origin !== `http://${expected}`) ||
-      req.headers["sec-fetch-site"] === "cross-site"
-    )
+    const allowedHosts = [`127.0.0.1:${rt.config.port}`, `localhost:${rt.config.port}`];
+    const isAllowedHost = allowedHosts.includes(req.headers.host);
+    const isAllowedOrigin = !req.headers.origin || allowedHosts.some(h => req.headers.origin === `http://${h}`);
+    if (!isAllowedHost || !isAllowedOrigin || req.headers["sec-fetch-site"] === "cross-site")
       return res
         .status(403)
         .json({ error: "Only same-origin loopback requests are allowed." });
@@ -48,7 +55,18 @@ export function createApp(rt) {
     code: "API_ROUTE_NOT_FOUND",
   }));
   app.get("/vendor/lucide.js", (req, res) => res.sendFile(path.join(rt.root, "node_modules/lucide/dist/umd/lucide.min.js")));
-  app.use(express.static(path.join(rt.root, "frontend/public")));
+  const distDir = path.join(rt.root, "frontend/dist");
+  const publicDir = path.join(rt.root, "frontend/public");
+  if (fs.existsSync(distDir)) {
+    app.use(express.static(distDir));
+  }
+  app.use(express.static(publicDir));
+  app.get(/^(?!\/api).*/, (req, res) => {
+    const indexPath = fs.existsSync(path.join(distDir, "index.html"))
+      ? path.join(distDir, "index.html")
+      : path.join(publicDir, "index.html");
+    res.sendFile(indexPath);
+  });
   app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);
     res

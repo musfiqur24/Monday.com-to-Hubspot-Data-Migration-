@@ -1,0 +1,453 @@
+@import "tailwindcss";
+@source "../public/**/*.{html,js}";
+
+@theme {
+  --color-brand: #ff7a59;
+  --color-brand-light: #fff0eb;
+  --color-brand-hover: #e26746;
+  --color-brand-dark: #df6d50;
+  --color-monday-red: #ff3d57;
+  --color-monday-yellow: #ffcc00;
+  --color-monday-green: #00ca72;
+}
+
+:root {
+  --coral: #ff7a59;
+  --teal: #007a8c;
+  --border: #e2e8f0;
+  --muted: #64748b;
+  --dash-ink: #1e293b;
+  --dash-muted: #64748b;
+  --dash-border: #e2e8f0;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #1e293b;
+  background-color: #f8fafc;
+}
+
+body {
+  margin: 0;
+  background-color: #f8fafc;
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ── Topbar & Workspace ─────────────────────────────────────────────────── */
+.topbar {
+  @apply h-[72px] bg-white border-b border-slate-200 flex items-center px-7 gap-6 text-slate-800 z-30 relative;
+}
+.brand {
+  @apply flex items-center gap-3 no-underline text-slate-800 text-[17px] font-bold tracking-tight;
+}
+.brand-symbol {
+  @apply w-9 h-9 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center font-extrabold text-xl shrink-0;
+}
+.brand-symbol img {
+  @apply block object-contain;
+}
+.topbar-divider {
+  @apply w-px h-5 bg-slate-200 inline-block mx-1;
+}
+.topbar-label {
+  @apply text-xs text-slate-400 font-medium;
+}
+.topbar-right {
+  @apply ml-auto flex items-center gap-3 text-xs;
+}
+.workspace-badge {
+  @apply px-3 py-1.5 bg-slate-100 rounded-md text-[11px] font-medium text-slate-500;
+}
+.connection {
+  @apply flex items-center text-xs font-semibold;
+}
+.connection:before, .dot {
+  content: "";
+  @apply inline-block w-2 h-2 rounded-full mr-2 bg-slate-300;
+}
+.connection.live:before, .dot {
+  @apply bg-emerald-500;
+}
+.connection.reconnecting:before {
+  @apply bg-amber-400;
+}
+
+.workspace {
+  @apply flex min-h-[calc(100vh-72px)] bg-slate-50;
+}
+.workspace main {
+  @apply flex-1 min-w-0 max-w-[1650px] p-8 pb-32;
+}
+
+/* ── Sidebar ────────────────────────────────────────────────────────────── */
+.sidebar {
+  @apply w-[246px] shrink-0 bg-white border-r border-slate-200 p-6 flex flex-col sticky top-0 h-[calc(100vh-72px)] overflow-y-auto z-20;
+}
+.nav-caption {
+  @apply text-[10px] font-bold tracking-widest text-slate-400 px-3.5 mb-3 select-none;
+}
+.nav-section {
+  @apply mt-8;
+}
+.dashboard-link {
+  @apply w-full flex items-center gap-3 px-3.5 py-3 rounded-lg text-[13px] font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer border-0 bg-transparent text-left;
+}
+.dashboard-link.active {
+  @apply bg-[#fff0eb] text-[#df6d50];
+}
+.nav-icon {
+  @apply text-xl leading-none text-slate-500 shrink-0;
+}
+.module-group {
+  @apply mt-2;
+}
+.module-group > summary {
+  @apply list-none flex items-center justify-between px-3.5 py-3 rounded-lg text-[13px] font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 cursor-pointer select-none transition;
+}
+.module-group > summary::-webkit-details-marker {
+  display: none;
+}
+.module-group > summary::after {
+  content: '›';
+  transform: rotate(90deg);
+  @apply text-base text-slate-400 leading-none transition-transform;
+}
+.module-group:not([open]) > summary::after {
+  transform: none;
+}
+.nav-summary-title {
+  @apply inline-flex items-center gap-2.5 font-semibold text-inherit;
+}
+.nav-menu-icon {
+  @apply w-[18px] h-[18px] shrink-0 inline-block align-middle;
+}
+.module-links {
+  @apply flex flex-col gap-1 my-2 ml-3.5 pl-3 border-l border-slate-200;
+}
+.module-links button {
+  @apply px-3 py-2 rounded-md text-left text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-slate-50 transition border-0 bg-transparent cursor-pointer;
+}
+.module-links button.active {
+  @apply bg-[#fff0eb] text-[#df6d50] font-semibold;
+}
+#steps {
+  @apply flex flex-col gap-1 my-2 ml-3.5 pl-3 border-l border-slate-200;
+}
+.step {
+  @apply w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition border-0 bg-transparent cursor-pointer;
+}
+.step strong {
+  @apply font-semibold block;
+}
+.step small {
+  @apply hidden;
+}
+.step-number {
+  @apply w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 border border-slate-300 bg-white text-slate-500;
+}
+.step.active {
+  @apply bg-[#fff0eb] text-[#df6d50] font-semibold;
+}
+.step.active .step-number {
+  @apply bg-[#ff7a59] border-[#ff7a59] text-white;
+}
+.sidebar-bottom {
+  @apply mt-auto pt-6 text-[11px] text-slate-400 flex items-center gap-1.5 select-none;
+}
+
+/* ── Cards & Headings ───────────────────────────────────────────────────── */
+.card {
+  @apply bg-white border border-slate-200 rounded-xl overflow-hidden mb-5 shadow-xs;
+}
+.card-heading {
+  @apply px-6 py-5 flex items-center justify-between gap-4 border-b border-slate-100;
+}
+.card-heading h2 {
+  @apply text-sm font-semibold text-slate-800 m-0;
+}
+.card-heading p {
+  @apply text-xs text-slate-500 m-0 mt-1;
+}
+.card-body {
+  @apply p-6;
+}
+.page-heading {
+  @apply flex items-center justify-between gap-4 mb-6;
+}
+.breadcrumb {
+  @apply text-xs text-slate-400 mb-2 flex items-center gap-1.5;
+}
+.breadcrumb span {
+  @apply text-slate-300;
+}
+h1 {
+  @apply text-2xl font-bold tracking-tight text-slate-800 m-0;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────────────── */
+.button {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-transparent text-xs font-semibold whitespace-nowrap cursor-pointer transition select-none disabled:opacity-50 disabled:cursor-not-allowed;
+}
+.button.primary {
+  @apply text-white bg-[#ff7a59] hover:bg-[#e26746] border-transparent shadow-xs;
+}
+.button.secondary {
+  @apply text-slate-700 bg-white border-slate-300 hover:bg-slate-50 shadow-xs;
+}
+.button.danger {
+  @apply text-rose-600 bg-rose-50 border-rose-200 hover:bg-rose-100;
+}
+.button.plain {
+  @apply text-slate-600 bg-transparent hover:bg-slate-100 border-transparent;
+}
+.button.large {
+  @apply px-6 py-3 text-sm;
+}
+.icon-button {
+  @apply p-2 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 border-0 bg-transparent cursor-pointer inline-flex items-center justify-center;
+}
+
+/* ── Badges & Pills ─────────────────────────────────────────────────────── */
+.pill {
+  @apply inline-flex items-center text-[10px] font-semibold px-2.5 py-1 rounded-full whitespace-nowrap;
+}
+.pill.neutral {
+  @apply bg-slate-100 text-slate-600;
+}
+.pill.success {
+  @apply bg-emerald-50 text-emerald-700 border border-emerald-200;
+}
+.pill.warning {
+  @apply bg-amber-50 text-amber-700 border border-amber-200;
+}
+.pill.error {
+  @apply bg-rose-50 text-rose-700 border border-rose-200;
+}
+
+/* ── Dropzone & Upload ──────────────────────────────────────────────────── */
+.dropzone {
+  @apply flex flex-col items-center justify-center relative p-7 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-[#ff7a59] hover:bg-orange-50/20 transition text-center gap-2;
+}
+.dropzone input {
+  @apply absolute inset-0 opacity-0 cursor-pointer w-full h-full;
+}
+.upload-icon {
+  @apply text-3xl text-slate-400;
+}
+.file-card {
+  @apply flex items-center gap-3.5 bg-slate-50 border border-slate-200 p-4 rounded-lg mb-4;
+}
+.file-icon {
+  @apply w-10 h-10 rounded-md bg-emerald-50 text-emerald-600 font-bold text-[10px] flex items-center justify-center shrink-0;
+}
+
+/* ── Forms ──────────────────────────────────────────────────────────────── */
+input:not([type=checkbox]):not([type=radio]):not([type=file]), select {
+  @apply w-full border border-slate-300 rounded-lg bg-white text-slate-800 text-xs px-3.5 py-2.5 outline-none transition focus:border-[#ff7a59] focus:ring-2 focus:ring-[#ff7a59]/20;
+}
+.checkbox-label {
+  @apply flex items-center gap-2.5 text-xs text-slate-700 cursor-pointer select-none;
+}
+.checkbox-label input {
+  @apply w-4 h-4 rounded text-[#ff7a59] accent-[#ff7a59] cursor-pointer;
+}
+
+/* ── Tables & Mapping ───────────────────────────────────────────────────── */
+.mapping-table-wrap {
+  @apply bg-white border border-slate-200 rounded-xl overflow-auto shadow-xs;
+}
+.mapping-table {
+  @apply w-full border-collapse text-left text-xs;
+}
+.mapping-table th {
+  @apply bg-slate-50 text-slate-500 font-semibold text-[11px] px-4 py-3.5 border-b border-slate-200 sticky top-0 z-10;
+}
+.mapping-table td {
+  @apply px-4 py-3.5 border-b border-slate-100 text-slate-600 align-top;
+}
+.mapping-table tr:hover td {
+  @apply bg-slate-50/60;
+}
+.filter-tabs {
+  @apply flex items-center gap-1 border-b border-slate-200;
+}
+.filter-tabs button {
+  @apply px-3.5 py-2 text-xs font-medium text-slate-500 border-b-2 border-transparent hover:text-slate-800 transition bg-transparent cursor-pointer;
+}
+.filter-tabs button.selected {
+  @apply text-[#ff7a59] border-[#ff7a59] font-semibold;
+}
+.filter-tabs span {
+  @apply text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 ml-1.5;
+}
+
+/* ── Dashboard Metrics & Charts ─────────────────────────────────────────── */
+.dash-heading {
+  @apply flex items-center justify-between gap-4 mb-7;
+}
+.dash-eyebrow {
+  @apply text-[10px] font-bold tracking-widest text-slate-400 mb-2 uppercase;
+}
+.dash-metrics {
+  @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6;
+}
+.metric-card {
+  @apply bg-white border border-slate-200 rounded-xl p-5 shadow-xs;
+}
+.metric-label {
+  @apply flex items-center justify-between text-xs text-slate-500 font-medium;
+}
+.metric-icon {
+  @apply w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold;
+}
+.metric-card > strong {
+  @apply block text-2xl font-bold text-slate-800 tracking-tight my-2.5;
+}
+.metric-card > small {
+  @apply text-[11px] text-slate-400;
+}
+.orange { @apply bg-[#fff0eb] text-[#ff7a59]; }
+.violet { @apply bg-purple-50 text-purple-600; }
+.blue { @apply bg-blue-50 text-blue-600; }
+.amber { @apply bg-amber-50 text-amber-600; }
+
+.dash-chart-grid {
+  @apply grid grid-cols-1 lg:grid-cols-[1.9fr_1fr] gap-6 mb-6;
+}
+.dash-card {
+  @apply bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs;
+}
+.dash-card-heading {
+  @apply p-6 pb-2 flex items-center justify-between gap-3;
+}
+.dash-card-heading h2 {
+  @apply text-sm font-semibold text-slate-800 m-0;
+}
+.dash-card-heading p {
+  @apply text-xs text-slate-400 m-0 mt-1;
+}
+
+/* ── Wizard Footer ──────────────────────────────────────────────────────── */
+.wizard-footer {
+  @apply fixed bottom-0 left-[246px] right-0 bg-white border-t border-slate-200 px-8 py-3.5 flex items-center justify-between z-30 shadow-md;
+}
+
+/* ── HubSpot Specific Styles ────────────────────────────────────────────── */
+.hs-stepper {
+  @apply grid grid-cols-2 md:grid-cols-4 p-2 bg-white border border-slate-200 rounded-xl gap-2 mb-6 shadow-xs;
+}
+.hs-stepper button {
+  @apply flex items-center justify-center gap-2.5 py-3 px-2 rounded-lg text-xs font-medium text-slate-500 bg-transparent border-0 cursor-pointer transition;
+}
+.hs-stepper button.active {
+  @apply bg-[#fff0eb] text-[#df6d50] font-semibold;
+}
+.hs-stepper button>span {
+  @apply w-6 h-6 rounded-full border border-slate-200 flex items-center justify-center text-[11px] font-bold;
+}
+.hs-stepper button.active>span {
+  @apply bg-[#ff7a59] border-[#ff7a59] text-white;
+}
+.hs-grid {
+  @apply grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6 items-start;
+}
+.hs-card {
+  @apply bg-white border border-slate-200 rounded-xl p-6 shadow-xs;
+}
+.hs-field {
+  @apply flex flex-col gap-2;
+}
+
+/* ── Screen Overlay & Commet Loader ─────────────────────────────────────── */
+.hs-screen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  pointer-events: auto;
+}
+.hs-screen-overlay-content {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.commet-rli-bounding-box {
+  --commet-phase1-color: #fab202;
+  font-size: 16px;
+  width: 6.85em;
+  height: 6.85em;
+  overflow: hidden;
+  display: inline-block;
+  box-sizing: border-box;
+  position: relative;
+  isolation: isolate;
+  vertical-align: middle;
+}
+.commet-rli-bounding-box.size-large {
+  font-size: 20px;
+}
+.commet-rli-bounding-box svg {
+  height: 100%;
+  width: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  animation: uxlv7zl 1.25s linear infinite;
+}
+.commet-rli-bounding-box circle {
+  stroke-linecap: round;
+  animation: uxlv7zu 1.25s ease-in-out infinite;
+}
+@keyframes uxlv7zl {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes uxlv7zu {
+  0% { stroke-dashoffset: 0.01; stroke-dasharray: 0.01px, 200px; }
+  50% { stroke-dashoffset: -35.25; stroke-dasharray: 70.5px, 200px; }
+  100% { stroke-dashoffset: -141; stroke-dasharray: 70.5px, 200px; }
+}
+
+/* ── Toast Notifications ────────────────────────────────────────────────── */
+.toast-region {
+  @apply fixed top-20 right-6 z-[100000] flex flex-col gap-2.5 w-[min(390px,calc(100vw-32px))] pointer-events-none;
+}
+.ui-toast {
+  @apply flex items-start gap-3 p-4 border border-slate-200 rounded-xl bg-white shadow-xl pointer-events-auto transition;
+}
+.toast-symbol {
+  @apply mt-0.5 shrink-0;
+}
+.toast-content {
+  @apply flex-1 min-w-0;
+}
+.toast-content strong {
+  @apply text-xs font-semibold text-slate-800 block;
+}
+.toast-content p {
+  @apply text-xs text-slate-500 m-0 mt-1;
+}
+
+@media(max-width: 900px) {
+  .sidebar {
+    @apply w-full h-auto p-4 flex-row flex-wrap border-r-0 border-b border-slate-200 static;
+  }
+  .wizard-footer {
+    @apply left-0;
+  }
+  .nav-caption, .sidebar-bottom {
+    @apply hidden;
+  }
+}

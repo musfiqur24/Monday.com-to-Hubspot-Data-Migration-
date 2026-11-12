@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { HubspotImport } from '../services/hubspotImport.js';
-import { fail } from '../lib/sanitize.js';
+import { fail, safeError } from '../lib/sanitize.js';
 import { associations } from './associations.js';
 
 export function hubspotMigration(rt) {
@@ -70,10 +70,26 @@ export function hubspotMigration(rt) {
     if(job.running) service.progress(req.params.mode,{cancelRequested:true},'Stopping after the current record.');
     res.json(service.status(req.params.mode));
   });
+  router.post('/:mode/reset',(req,res)=>{
+    const job=service.reset(req.params.mode);
+    res.json(job);
+  });
   router.get('/:mode/report',(req,res)=>{
     const report=service.status(req.params.mode).report;
     if(!report) return res.status(404).json({error:'No report is available yet.'});
     res.download(path.join(rt.root,'reports',path.basename(report)));
+  });
+  router.get('/:mode/issues-report',async(req,res)=>{
+    try {
+      const session=service.get(req.params.mode);
+      if(!session?.config) return res.status(400).json({error:'Map columns and run validation before downloading issues.'});
+      const result=await service.issuesCsv(req.params.mode);
+      res.setHeader('Content-Type','text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition',`attachment; filename="${result.filename}"`);
+      res.send(result.content);
+    } catch(err) {
+      res.status(400).json({error:safeError(err)});
+    }
   });
   return router;
 }

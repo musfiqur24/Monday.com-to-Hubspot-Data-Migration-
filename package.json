@@ -7,7 +7,11 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "node backend/src/server.js",
+    "build": "npm run build:css && vite build",
+    "dev:frontend": "vite",
+    "build:css": "tailwindcss -i frontend/src/index.css -o frontend/public/tailwind.css --minify",
+    "watch:css": "tailwindcss -i frontend/src/index.css -o frontend/public/tailwind.css --watch",
+    "start": "npm run build && node backend/src/server.js",
     "dev": "node backend/src/server.js",
     "migrate": "node backend/src/cli.js",
     "verify-files": "node backend/src/verify-files.js"
@@ -20,10 +24,14 @@
     "got-scraping": "^4.2.2",
     "helmet": "^8.1.0",
     "lucide": "^1.68.0",
+    "lucide-react": "^1.72.0",
     "multer": "^2.4.0",
     "p-limit": "^6.2.0",
     "p-queue": "^10.0.0",
     "pino": "^9.7.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-loading-indicators": "^1.0.1",
     "sharp": "^0.35.5",
     "undici": "^6.21.3",
     "zod": "^3.25.0"
@@ -32,5 +40,13 @@
     "exceljs": {
       "uuid": "^11.1.1"
     }
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.5",
+    "@vitejs/plugin-react": "^6.3.0",
+    "autoprefixer": "^10.6.2",
+    "postcss": "^8.5.32",
+    "tailwindcss": "^4.3.5",
+    "vite": "^8.3.8"
   }
 }
