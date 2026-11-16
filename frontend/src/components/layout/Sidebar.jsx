@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LayoutGrid, ChevronRight, History } from 'lucide-react';
 
 export function Sidebar({ activeModule, onSelectModule, mondayStep, onSelectMondayStep }) {
@@ -6,6 +6,14 @@ export function Sidebar({ activeModule, onSelectModule, mondayStep, onSelectMond
     activeModule === 'data-migrate' || activeModule === 'data-migrate-association'
   );
   const [mondayOpen, setMondayOpen] = useState(activeModule === 'monday');
+
+  useEffect(() => {
+    if (activeModule === 'data-migrate' || activeModule === 'data-migrate-association') {
+      setHubspotOpen(true);
+    } else if (activeModule === 'monday') {
+      setMondayOpen(true);
+    }
+  }, [activeModule]);
 
   const handleMondayClick = (stepIndex) => {
     onSelectModule('monday');
@@ -53,7 +61,12 @@ export function Sidebar({ activeModule, onSelectModule, mondayStep, onSelectMond
       <div className="mt-1">
         <button
           type="button"
-          onClick={() => setHubspotOpen(!hubspotOpen)}
+          onClick={() => {
+            setHubspotOpen(!hubspotOpen);
+            if (activeModule !== 'data-migrate' && activeModule !== 'data-migrate-association') {
+              onSelectModule('data-migrate');
+            }
+          }}
           className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-[13px] font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 cursor-pointer select-none transition border-0 bg-transparent"
         >
           <span className="inline-flex items-center gap-2.5 font-semibold text-inherit">
@@ -97,7 +110,10 @@ export function Sidebar({ activeModule, onSelectModule, mondayStep, onSelectMond
       <div className="mt-1">
         <button
           type="button"
-          onClick={() => setMondayOpen(!mondayOpen)}
+          onClick={() => {
+            setMondayOpen(!mondayOpen);
+            if (activeModule !== 'monday') onSelectModule('monday');
+          }}
           className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-[13px] font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 cursor-pointer select-none transition border-0 bg-transparent"
         >
           <span className="inline-flex items-center gap-2.5 font-semibold text-inherit">

@@ -291,7 +291,7 @@ export function MigrationHistory({ onShowToast }) {
       list = list.filter(r =>
         r.filename.toLowerCase().includes(q) ||
         r.type.toLowerCase().includes(q) ||
-        r.module.toLowerCase().includes(q)
+        r.module.toLowerCase().includes(q) || (r.status && r.status.toLowerCase().includes(q))
       );
     }
 
@@ -511,11 +511,12 @@ export function MigrationHistory({ onShowToast }) {
         <table className="w-full table-fixed text-[12.5px]">
           <colgroup>
             <col className="w-9" />       {/* checkbox */}
-            <col className="w-[26%]" />   {/* filename */}
-            <col className="w-[22%]" />   {/* module */}
-            <col className="w-[16%]" />   {/* report type */}
-            <col className="w-[18%]" />   {/* date */}
-            <col className="w-[8%]" />    {/* size */}
+            <col className="w-[22%]" />   {/* filename */}
+            <col className="w-[18%]" />   {/* module */}
+            <col className="w-[15%]" />   {/* report type */}
+            <col className="w-[12%]" />   {/* status */}
+            <col className="w-[16%]" />   {/* date */}
+            <col className="w-[7%]" />    {/* size */}
             <col className="w-[10%]" />   {/* actions */}
           </colgroup>
           <thead className="bg-slate-50 border-b border-slate-200">
@@ -533,6 +534,7 @@ export function MigrationHistory({ onShowToast }) {
               <th className="px-3 py-2.5 text-left text-[10.5px] font-semibold text-slate-500 uppercase tracking-wide">File Name</th>
               <th className="px-3 py-2.5 text-left text-[10.5px] font-semibold text-slate-500 uppercase tracking-wide">Module</th>
               <th className="px-3 py-2.5 text-left text-[10.5px] font-semibold text-slate-500 uppercase tracking-wide">Type</th>
+              <th className="px-3 py-2.5 text-left text-[10.5px] font-semibold text-slate-500 uppercase tracking-wide">Status</th>
               <th className="px-3 py-2.5 text-left text-[10.5px] font-semibold text-slate-500 uppercase tracking-wide">Date & Time</th>
               <th className="px-3 py-2.5 text-left text-[10.5px] font-semibold text-slate-500 uppercase tracking-wide">Size</th>
               <th className="px-3 py-2.5 text-right text-[10.5px] font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
@@ -541,7 +543,7 @@ export function MigrationHistory({ onShowToast }) {
           <tbody className="divide-y divide-slate-100">
             {paginatedRuns.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-5 py-10 text-center text-slate-400 italic text-[13px]">
+                <td colSpan={8} className="px-5 py-10 text-center text-slate-400 italic text-[13px]">
                   No migration runs match your criteria.
                 </td>
               </tr>
@@ -591,6 +593,13 @@ export function MigrationHistory({ onShowToast }) {
                     <td className="px-3 py-3">
                       <Badge variant={run.type.includes('Contact') ? 'brand' : run.type.includes('Asset') ? 'info' : 'neutral'}>
                         {run.type}
+                      </Badge>
+                    </td>
+
+                    {/* Status */}
+                    <td className="px-3 py-3">
+                      <Badge variant={run.status === 'completed' || !run.status ? 'success' : run.status === 'partial' ? 'warning' : 'error'}>
+                        {run.status === 'failed' ? 'Failed' : run.status === 'partial' ? 'Partial' : 'Completed'}
                       </Badge>
                     </td>
 

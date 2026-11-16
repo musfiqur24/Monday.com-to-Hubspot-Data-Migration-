@@ -59,17 +59,26 @@ export function parseFileCell(cell) {
 }
 export async function readExcel(file, mapping) {
   const book = new ExcelJS.Workbook();
+  let loaded = false;
+
+  // 1. Sniff magic bytes: ZIP archive (PK\x03\x04) = XLSX, otherwise plain text = CSV
+  let isZip = false;
   try {
-    if (file.toLowerCase().endsWith(".csv")) {
-      await book.csv.readFile(file);
-    } else {
+    const headerBuf = Buffer.alloc(4);
+    const fd = await fs.open(file, "r");
+    await fd.read(headerBuf, 0, 4, 0);
+    await fd.close();
+    isZip = headerBuf[0] === 0x50 && headerBuf[1] === 0x4B && headerBuf[2] === 0x03 && headerBuf[3] === 0x04;
+  } catch {
+    isZip = !file.toLowerCase().endsWith(".csv");
+  }
+
+  // 2. Load based on detected format (with XML namespace auto-healing for Monday.com OpenXML exports)
+  if (isZip) {
+    try {
       await book.xlsx.readFile(file);
-    }
-  } catch (err) {
-    let healed = false;
-    // Some exporters (OpenXML, Monday.com, etc.) prefix tags with XML namespaces like <x:workbook>,
-    // which triggers an internal TypeError in ExcelJS. Auto-sanitize the XML and reload.
-    if (!file.toLowerCase().endsWith(".csv")) {
+      loaded = true;
+    } catch (xlsxErr) {
       try {
         const raw = await fs.readFile(file);
         const zip = await JSZip.loadAsync(raw);
@@ -89,27 +98,56 @@ export async function readExcel(file, mapping) {
         if (modified) {
           const fixedBuffer = await zip.generateAsync({ type: "nodebuffer" });
           await book.xlsx.load(fixedBuffer);
-          healed = true;
+          loaded = true;
         }
-      } catch (healErr) {
-        // Fall through to error handler
-      }
-    }
-    if (!healed) {
-      console.error("[internal] Workbook read failed:", err);
-      throw fail(
-        "Could not read the workbook. Make sure the file is a valid .xlsx file, is not open in Excel, and was not corrupted during upload. Close Excel, save the file, and try again.",
-      );
+      } catch (healErr) {}
     }
   }
+
+  // 3. If not ZIP or XLSX failed, try CSV (with auto delimiter detection: comma, semicolon, tab)
+  if (!loaded) {
+    try {
+      let delimiter = ",";
+      try {
+        const snippetBuf = Buffer.alloc(2048);
+        const fd = await fs.open(file, "r");
+        const { bytesRead } = await fd.read(snippetBuf, 0, 2048, 0);
+        await fd.close();
+        const snippet = snippetBuf.subarray(0, bytesRead).toString("utf8").split(/\r?\n/)[0] || "";
+        const commas = (snippet.match(/,/g) || []).length;
+        const semis = (snippet.match(/;/g) || []).length;
+        const tabs = (snippet.match(/\t/g) || []).length;
+        if (semis > commas && semis > tabs) delimiter = ";";
+        else if (tabs > commas && tabs > semis) delimiter = "\t";
+      } catch {}
+
+      await book.csv.readFile(file, { parserOptions: { delimiter } });
+      loaded = true;
+    } catch (csvErr) {
+      if (!isZip) {
+        try {
+          await book.xlsx.readFile(file);
+          loaded = true;
+        } catch {}
+      }
+    }
+  }
+
+  if (!loaded) {
+    console.error("[internal] Workbook read failed for:", file);
+    throw fail(
+      "Could not read the file. Make sure the file is a valid .xlsx or .csv file, is not open in Excel, and was not corrupted during upload. Close Excel, save the file, and try again.",
+    );
+  }
+  const availableSheets = book.worksheets.map((w) => w.name);
   const sheet =
-    book.getWorksheet(mapping.sheet) ||
-    (mapping.sheet &&
+    (mapping?.sheet && book.getWorksheet(mapping.sheet)) ||
+    (mapping?.sheet &&
       book.worksheets.find(
         (w) => w.name.toLowerCase() === mapping.sheet.toLowerCase(),
       )) ||
     book.worksheets[0];
-  if (!sheet) throw fail(`Required worksheet is missing: ${mapping.sheet}`);
+  if (!sheet) throw fail(`Required worksheet is missing: ${mapping?.sheet || 'first worksheet'}`);
 
   const targetEmail = (mapping.emailColumn || "Email").trim().toLowerCase();
   const targetName = (mapping.nameColumn || "Name").trim().toLowerCase();
@@ -283,6 +321,8 @@ export async function readExcel(file, mapping) {
   });
 
   return {
+    sheetName: sheet.name,
+    availableSheets,
     columns,
     rows: Math.max(0, sheet.rowCount - headerRowIndex),
     groups: [...groups.values()],

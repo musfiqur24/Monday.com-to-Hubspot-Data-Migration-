@@ -316,6 +316,13 @@ export class HubspotImport {
       if(!same) throw fail(`Read-back verification failed for ${key}.`);
     }
   }
+  clearWorkbook(mode) {
+    const session = this.get(mode);
+    if (session) {
+      this.save(mode, { ...session, file: null, extension: null, filename: null, summary: null, config: null });
+    }
+    return this.get(mode);
+  }
   reset(mode) {
     const lock=path.join(this.rt.root,'state/run.lock');
     try { fs.unlinkSync(lock); } catch {}

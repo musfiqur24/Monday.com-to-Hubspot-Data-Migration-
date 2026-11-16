@@ -25,7 +25,9 @@ export function api(runtime) {
         const workbook = await readExcel(activeFile, { ...mapping, contactMode: 'upsert' }); columns = workbook.columns;
         const matchCol = (a, b) => a === b || normalize(a) === normalize(b) || normalize(a).replace(/s$/, "") === normalize(b).replace(/s$/, "");
         columnCoverage=columns.map(column=>({column,destination:column===mapping.emailColumn?'email':mapping.columns.find(c=>matchCol(c.excel, column))?.hubspotProperty||mapping.propertyMappings.find(c=>matchCol(c.excel, column))?.hubspotProperty||'',populatedRows:workbook.contacts.filter(row=>String(row.values[column]??'').trim()).length}));
-        workbookSummary = { filename:path.basename(activeFile), rows:workbook.rows, contacts:workbook.contacts.length, files:workbook.groups.reduce((n,g)=>n+g.files.length,0), columns:columns.length, issues:workbook.issues.length };
+        const fileBaseName = path.basename(activeFile, path.extname(activeFile));
+        const effectiveSheet = (mapping.sheet && mapping.sheet !== 'client') ? mapping.sheet : fileBaseName;
+        workbookSummary = { filename:path.basename(activeFile), sheetName:effectiveSheet, availableSheets:workbook.availableSheets, rows:workbook.rows, contacts:workbook.contacts.length, files:workbook.groups.reduce((n,g)=>n+g.files.length,0), columns:columns.length, issues:workbook.issues.length };
         for (const column of columns) previews[column] = workbook.contacts.slice(0,3).map(row => {
           const files = workbook.groups.find(g=>g.email===row.email && g.column.excel===column)?.files;
           return files ? `${files.length} ${files.length===1?'file':'files'}` : String(row.values[column]||'').slice(0,100);
@@ -56,7 +58,6 @@ export function api(runtime) {
         const isXlsx = req.file.originalname.toLowerCase().endsWith('.xlsx');
         const isCsv = req.file.originalname.toLowerCase().endsWith('.csv');
         if (!isXlsx && !isCsv) throw fail('Only XLSX workbooks and CSV files are supported.');
-        const detected = await readExcel(req.file.path, readMapping());
         const ext = isCsv ? '.csv' : '.xlsx';
         const baseName = path.basename(req.file.originalname, ext).replace(/[^a-zA-Z0-9 _-]/g, '_').trim() || 'uploaded_workbook';
         let destFile = path.join(root, 'data', `${baseName}${ext}`);
@@ -72,9 +73,32 @@ export function api(runtime) {
           }
         }
         runtime.file = destFile;
-        res.json({ columns: detected.columns, rows: detected.rows, issues: detected.issues });
+        const detected = await readExcel(destFile, readMapping());
+        try {
+          const currentMapping = readMapping();
+          currentMapping.sheet = baseName;
+          writeMapping(currentMapping);
+        } catch (e) {}
+        res.json({
+          sheetName: baseName,
+          actualWorksheet: detected.sheetName,
+          availableSheets: detected.availableSheets,
+          columns: detected.columns,
+          rows: detected.rows,
+          issues: detected.issues
+        });
       } finally { await fs.unlink(req.file.path).catch(() => {}); }
     }); } catch (error) { next(error); }
+  });
+  router.post('/workbook/clear', (req, res) => {
+    if (migration.status.running) return res.status(409).json({ error: 'A job is running.' });
+    runtime.file = null;
+    try {
+      const currentMapping = readMapping();
+      currentMapping.sheet = 'Combined';
+      writeMapping(currentMapping);
+    } catch (e) {}
+    res.json({ success: true, message: 'Workbook cleared.' });
   });
   router.post('/preflight', async (req, res) => {
     if (!runtime.file || !(await fs.stat(runtime.file).catch(() => null))) throw fail('Please upload or select a CSV or Excel workbook first.');
@@ -155,6 +179,7 @@ export function api(runtime) {
             let module = 'Monday to HubSpot';
             let type = 'File Migration';
             let timestamp = stats.mtime;
+            let status = 'completed'; // default
 
             if (filename.startsWith('contacts-')) {
               type = 'Contacts Report';
@@ -180,10 +205,37 @@ export function api(runtime) {
               type = 'Issues Report';
             }
 
+            // Peek at tail of CSV to derive status (failed / partial / completed)
+            if (filename.endsWith('.csv') && stats.size > 0) {
+              try {
+                const tailSize = Math.min(stats.size, 4096);
+                const buf = Buffer.alloc(tailSize);
+                const fh = await fs.open(filepath, 'r');
+                await fh.read(buf, 0, tailSize, stats.size - tailSize);
+                await fh.close();
+                const tail = buf.toString('utf8');
+                const lowerTail = tail.toLowerCase();
+                // Count failed / error rows
+                const failedCount = (lowerTail.match(/\bfailed\b/g) || []).length
+                                  + (lowerTail.match(/\berror\b/g) || []).length;
+                const hasUncertain = lowerTail.includes('uncertain');
+                if (failedCount > 2) {
+                  status = hasUncertain ? 'partial' : 'failed';
+                } else if (failedCount > 0 || hasUncertain) {
+                  status = 'partial';
+                } else {
+                  status = 'completed';
+                }
+              } catch {
+                status = 'completed';
+              }
+            }
+
             return {
               filename,
               module,
               type,
+              status,
               size: stats.size,
               createdAt: timestamp.toISOString(),
             };

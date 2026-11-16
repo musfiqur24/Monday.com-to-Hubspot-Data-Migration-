@@ -3,7 +3,7 @@ import {
   Upload, RefreshCw, Download, Play, Square, RotateCcw,
   CheckCircle, AlertTriangle, XCircle, Wifi, WifiOff,
   ChevronDown, ChevronUp, Search, FileText, Users, File,
-  Settings, Trash2, Clock
+  Settings, Trash2, Clock, X
 } from 'lucide-react';
 import { request, downloadFile } from '../../hooks/useApi.js';
 import { useSSE } from '../../hooks/useSSE.js';
@@ -298,6 +298,14 @@ function MappingRow({ item, properties, onChange, disabled }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) {
   const [step, setStep] = useState(initialStep);
+
+  // Synchronize internal step state whenever the sidebar or parent changes initialStep
+  useEffect(() => {
+    if (initialStep !== undefined && initialStep !== step) {
+      setStep(initialStep);
+    }
+  }, [initialStep]);
+
   const [busy, setBusy] = useState(false);
   const [busyMsg, setBusyMsg] = useState('');
   const [busySub, setBusySub] = useState('');
@@ -344,6 +352,7 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
   const [logs, setLogs] = useState([]);
   const runStateRef = useRef(runState);
   runStateRef.current = runState;
+  const prevPhaseRef = useRef('idle');
 
   const [elapsed, setElapsed] = useState('');
 
@@ -374,58 +383,71 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
     const m = data.mapping ?? {};
     setEmailColumn(m.emailColumn ?? '');
     setNameColumn(m.nameColumn ?? '');
-    setSheet(m.sheet ?? '');
+    if (data.workbookSummary) {
+      const activeFileName = data.workbookSummary.filename ? data.workbookSummary.filename.replace(/\.[^/.]+$/, '') : '';
+      const sheetValue = (m.sheet && m.sheet !== 'client') ? m.sheet : (activeFileName || data.workbookSummary.sheetName || '');
+      setSheet(sheetValue);
+    } else {
+      setSheet('');
+    }
     setContactMode(m.contactMode ?? 'upsert');
     setNumberedFallback(m.numberedFallback ?? 'same_property');
     setNoteSetFirst(!!m.noteSetFirst);
 
-    // Build items array
-    const cols = data.columns ?? m.columns ?? [];
-    const propMaps = m.propertyMappings ?? [];
+    // Build items array matching original mapping logic
+    const sourceColumns = data.columns ?? [];
+    const fileConfigs = m.columns ?? [];
+    const details = new Map((m.propertyMappings ?? []).map(i => [i.excel, i]));
+    const previews = data.previews ?? {};
 
-    const colItems = cols.map(c => ({
-      excel: c.excel ?? c.name ?? c,
-      kind: 'file',
-      hubspotProperty: c.hubspotProperty ?? '',
-      multiFileStrategy: c.multiFileStrategy ?? 'same_property',
-      type: c.type ?? '',
-      valueMap: c.valueMap ?? {},
-      createIfMissing: !!c.createIfMissing,
-      label: c.label ?? c.excel ?? '',
-      samples: (data.previews ?? {})[c.excel ?? c] ?? [],
-    }));
+    const colList = sourceColumns.length
+      ? sourceColumns
+      : [m.emailColumn, ...(m.propertyMappings ?? []).map(i => i.excel), ...fileConfigs.map(i => i.excel)].filter(Boolean);
 
-    const propItems = propMaps.map(p => ({
-      excel: p.excel,
-      kind: p.excel === m.emailColumn ? 'email' : 'contact',
-      hubspotProperty: p.hubspotProperty ?? '',
-      multiFileStrategy: '',
-      type: p.type ?? '',
-      fieldType: p.fieldType ?? '',
-      valueMap: p.valueMap ?? {},
-      createIfMissing: !!p.createIfMissing,
-      label: p.label ?? p.excel,
-      samples: (data.previews ?? {})[p.excel] ?? [],
-    }));
+    const uniqueCols = Array.from(new Set(colList));
 
-    // Merge: file cols + contact property mappings
-    const allItems = [...propItems, ...colItems];
-
-    // Add email column item if not already present
-    const hasEmail = allItems.some(i => i.kind === 'email');
-    if (!hasEmail && m.emailColumn) {
-      allItems.unshift({
-        excel: m.emailColumn,
-        kind: 'email',
-        hubspotProperty: 'email',
+    const allItems = uniqueCols.map(excel => {
+      const fileConfig = fileConfigs.find(c => c.excel === excel);
+      if (excel === m.emailColumn) {
+        return {
+          excel,
+          kind: 'email',
+          hubspotProperty: 'email',
+          multiFileStrategy: '',
+          type: 'string',
+          valueMap: {},
+          createIfMissing: false,
+          label: excel,
+          samples: previews[excel] ?? [],
+        };
+      }
+      if (fileConfig) {
+        return {
+          excel,
+          kind: 'file',
+          hubspotProperty: fileConfig.hubspotProperty ?? '',
+          multiFileStrategy: fileConfig.multiFileStrategy ?? m.numberedFallback ?? 'same_property',
+          type: fileConfig.type ?? '',
+          valueMap: fileConfig.valueMap ?? {},
+          createIfMissing: !!fileConfig.createIfMissing,
+          label: fileConfig.label ?? excel,
+          samples: previews[excel] ?? [],
+        };
+      }
+      const propDetail = details.get(excel) ?? {};
+      return {
+        excel,
+        kind: 'contact',
+        hubspotProperty: propDetail.hubspotProperty ?? '',
         multiFileStrategy: '',
-        type: 'string',
-        valueMap: {},
-        createIfMissing: false,
-        label: m.emailColumn,
-        samples: (data.previews ?? {})[m.emailColumn] ?? [],
-      });
-    }
+        type: propDetail.type ?? 'string',
+        fieldType: propDetail.fieldType ?? '',
+        valueMap: propDetail.valueMap ?? {},
+        createIfMissing: !!propDetail.createIfMissing,
+        label: propDetail.label ?? excel,
+        samples: previews[excel] ?? [],
+      };
+    });
 
     setItems(allItems);
     return data;
@@ -442,6 +464,14 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
   useEffect(() => {
     if (loaded) return;
     action(async () => {
+      // If page was reloaded by user (F5 / reload), clear previous workbook so it doesn't hold old files
+      try {
+        const navEntries = performance.getEntriesByType?.('navigation');
+        const isReload = navEntries?.[0]?.type === 'reload';
+        if (isReload) {
+          await request('/api/workbook/clear', 'POST', {}).catch(() => {});
+        }
+      } catch {}
       const data = await loadConfig();
       await loadProperties();
       setLoaded(true);
@@ -531,10 +561,16 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
       toast('Choose a CSV or XLSX file up to 100 MB.', 'error');
       return;
     }
+    const uploadedName = file.name.replace(/\.[^/.]+$/, '');
+    setSheet(uploadedName);
+    setMappingDirty(true);
     await action(async () => {
       const form = new FormData();
       form.append('file', file);
-      await request('/api/upload', 'POST', form);
+      const res = await request('/api/upload', 'POST', form);
+      if (res?.sheetName) {
+        setSheet(res.sheetName);
+      }
       await loadConfig();
       toast('Workbook uploaded successfully.', 'success');
     }, 'Uploading workbook…', 'Parsing columns and building mapping');
@@ -546,6 +582,18 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
     const file = e.dataTransfer.files[0];
     if (file) handleUpload(file);
   }, [handleUpload]);
+
+  const handleClearWorkbook = useCallback(async () => {
+    await action(async () => {
+      await request('/api/workbook/clear', 'POST', {});
+      setWorkbookSummary(null);
+      setWorkbookError('');
+      setSheet('');
+      if (fileRef.current) fileRef.current.value = '';
+      await loadConfig();
+      toast('Workbook removed.', 'info');
+    }, 'Removing workbook…');
+  }, [action, loadConfig, toast]);
 
   // ── Run preflight ─────────────────────────────────────────────────────────
   const handlePreflight = useCallback(async () => {
@@ -599,7 +647,7 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
   // ── Filter tabs ───────────────────────────────────────────────────────────
   const filterCounts = {
     all: items.length,
-    mapped: items.filter(i => i.hubspotProperty).length,
+    mapped: items.filter(i => Boolean(i.hubspotProperty || i.kind === 'email')).length,
     ignored: items.filter(i => !i.hubspotProperty && i.kind !== 'email').length,
     files: items.filter(i => i.kind === 'file').length,
     issues: 0, // could wire to preflight issues
@@ -608,7 +656,8 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
   const filteredItems = items.filter(item => {
     const q = search.toLowerCase();
     if (q && !item.excel.toLowerCase().includes(q)) return false;
-    if (filterTab === 'mapped') return !!item.hubspotProperty;
+    const isMapped = Boolean(item.hubspotProperty || item.kind === 'email');
+    if (filterTab === 'mapped') return isMapped;
     if (filterTab === 'ignored') return !item.hubspotProperty && item.kind !== 'email';
     if (filterTab === 'files') return item.kind === 'file';
     if (filterTab === 'issues') return false; // placeholder
@@ -623,6 +672,23 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
       issuesByColumn[issue.column].push(issue);
     }
   });
+
+  // ── Phase-transition toast ────────────────────────────────────────────────
+  useEffect(() => {
+    const prev = prevPhaseRef.current;
+    if (prev === runState.phase) return;
+    prevPhaseRef.current = runState.phase;
+    if (runState.phase === 'complete') {
+      toast(
+        runState.dryRun
+          ? 'Dry run complete — no changes were made to HubSpot.'
+          : `Migration complete! ${(runState.completed ?? 0).toLocaleString()} files · ${(runState.contactsDone ?? 0).toLocaleString()} contacts.`,
+        'success'
+      );
+    } else if (runState.phase === 'failed') {
+      toast(runState.error || 'Migration failed. Check the activity log for details.', 'error');
+    }
+  }, [runState.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Run progress ──────────────────────────────────────────────────────────
   const pct = runState.total
@@ -724,9 +790,21 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
                 {/* Workbook summary */}
                 {workbookSummary && (
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-[12px] text-emerald-800">
-                    <div className="font-semibold mb-1 flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4" />
-                      {workbookSummary.filename}
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="font-semibold flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-emerald-600" />
+                        {workbookSummary.filename}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleClearWorkbook}
+                        disabled={busy}
+                        title="Remove workbook"
+                        className="text-[11.5px] font-medium text-emerald-700 hover:text-red-600 transition flex items-center gap-1 cursor-pointer px-2 py-0.5 rounded hover:bg-emerald-100/60"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        Remove
+                      </button>
                     </div>
                     <div className="flex gap-3 flex-wrap text-emerald-700">
                       <span>{(workbookSummary.contacts ?? 0).toLocaleString()} contacts</span>
@@ -777,15 +855,33 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
 
                 {/* Sheet */}
                 <label className="flex flex-col gap-1.5 text-[12.5px] font-medium text-slate-700">
-                  Sheet name
+                  <div className="flex items-center justify-between">
+                    <span>Sheet name</span>
+                    {workbookSummary?.availableSheets?.length > 1 && (
+                      <span className="text-[11px] text-slate-400 font-normal">
+                        ({workbookSummary.availableSheets.length} sheets in workbook)
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="text"
+                    list="available-sheets-list"
                     value={sheet}
-                    onChange={e => setSheet(e.target.value)}
+                    onChange={e => {
+                      setSheet(e.target.value);
+                      setMappingDirty(true);
+                    }}
                     placeholder="Leave blank for first sheet"
                     disabled={busy}
                     className="px-3 py-2 rounded-lg border border-slate-200 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#ff7a59]/30 disabled:opacity-50"
                   />
+                  {workbookSummary?.availableSheets?.length > 0 && (
+                    <datalist id="available-sheets-list">
+                      {workbookSummary.availableSheets.map(s => (
+                        <option key={s} value={s} />
+                      ))}
+                    </datalist>
+                  )}
                 </label>
 
                 {/* Email + Name columns */}
@@ -936,12 +1032,13 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Scrollable table container with fixed max-height and sticky header */}
+            <div className="overflow-x-auto max-h-[560px] overflow-y-auto border-t border-slate-100">
               <table className="w-full text-[12.5px]">
-                <thead className="bg-slate-50 border-b border-slate-200">
+                <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-2xs">
                   <tr>
                     {['Source column', 'Sample values', 'Status', 'HubSpot property', ''].map(h => (
-                      <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                      <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap bg-slate-50">
                         {h}
                       </th>
                     ))}
@@ -1157,7 +1254,69 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
 
       {/* ───────── Step 3: Run & monitor ───────── */}
       {step === 3 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="flex flex-col gap-5">
+
+          {/* ── Completion result banner ── */}
+          {(runState.phase === 'complete' || runState.phase === 'failed') && !runState.running && (
+            runState.phase === 'complete' ? (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-start gap-4">
+                <CheckCircle className="w-6 h-6 text-emerald-500 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-emerald-900 text-[15px]">
+                    {runState.dryRun
+                      ? 'Dry run complete — no data was written to HubSpot'
+                      : 'Migration completed successfully'}
+                  </h3>
+                  <p className="text-emerald-700 text-[13px] mt-0.5">
+                    {runState.dryRun
+                      ? 'Review the results below. Run a real migration when you are ready.'
+                      : 'All records have been processed and sent to HubSpot.'}
+                  </p>
+                  <div className="flex flex-wrap gap-5 mt-3 text-[12.5px] text-emerald-800">
+                    {runState.filesTotal > 0 && (
+                      <span className="flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 shrink-0" />
+                        <strong>{(runState.filesTotal ?? 0).toLocaleString()}</strong>&nbsp;files processed
+                      </span>
+                    )}
+                    {runState.contactsTotal > 0 && (
+                      <span className="flex items-center gap-1.5">
+                        <Users className="w-4 h-4 shrink-0" />
+                        <strong>{(runState.contactsDone ?? 0).toLocaleString()}</strong>&nbsp;/&nbsp;
+                        <strong>{(runState.contactsTotal ?? 0).toLocaleString()}</strong>&nbsp;contacts updated
+                      </span>
+                    )}
+                    {runState.batchesTotal > 0 && (
+                      <span className="flex items-center gap-1.5">
+                        <strong>{(runState.batchesSent ?? 0).toLocaleString()}</strong>&nbsp;/&nbsp;
+                        <strong>{(runState.batchesTotal ?? 0).toLocaleString()}</strong>&nbsp;batches sent
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-red-50 border border-red-200 rounded-2xl p-5 flex items-start gap-4">
+                <XCircle className="w-6 h-6 text-red-500 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-red-900 text-[15px]">Migration encountered an error</h3>
+                  <p className="text-red-700 text-[13px] mt-0.5">
+                    {runState.error || 'The migration pipeline stopped unexpectedly. Check the activity log for details.'}
+                  </p>
+                  {runState.completed > 0 && (
+                    <div className="flex flex-wrap gap-5 mt-3 text-[12.5px] text-red-800">
+                      <span className="flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 shrink-0" />
+                        <strong>{(runState.completed ?? 0).toLocaleString()}</strong>&nbsp;records processed before failure
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* Controls */}
           <article className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
             <div className="flex items-start justify-between px-6 py-4 border-b border-slate-100">
@@ -1373,6 +1532,7 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
             </div>
           </article>
         </div>
+        </div>
       )}
 
       {/* ───────── Footer nav ───────── */}
@@ -1398,7 +1558,7 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
           <button
             type="button"
             onClick={async () => {
-              if (step === 1 && mappingDirty) {
+              if ((step === 0 || step === 1) && mappingDirty) {
                 await action(saveMappings, 'Saving mappings…');
               }
               goStep(Math.min(3, step + 1));

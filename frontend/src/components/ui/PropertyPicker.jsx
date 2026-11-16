@@ -21,10 +21,19 @@ export function PropertyPicker({
   allowCreate = false,
 }) {
   const [open, setOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
   const [search, setSearch] = useState('');
   const triggerRef = useRef(null);
   const panelRef = useRef(null);
   const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setOpenUpward(spaceBelow < 300 && rect.top > 300);
+    }
+  }, [open]);
 
   const eligible = properties.filter((p) => {
     if (p.calculated || p.modificationMetadata?.readOnlyValue || p.externalOptions) return false;
@@ -124,7 +133,7 @@ export function PropertyPicker({
       {open && (
         <div
           ref={panelRef}
-          className="absolute left-0 top-full mt-1 z-[9999] w-full min-w-[320px] max-w-[480px] bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden"
+          className={`absolute left-0 ${openUpward ? 'bottom-full mb-1' : 'top-full mt-1'} z-[9999] w-full min-w-[320px] max-w-[480px] bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden`}
           role="listbox"
         >
           {/* Search */}

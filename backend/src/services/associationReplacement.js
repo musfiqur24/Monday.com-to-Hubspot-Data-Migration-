@@ -55,6 +55,31 @@ export class AssociationReplacement {
   status(){return this.job||{running:false,phase:'idle',removed:0,created:0,logs:[]};}
   publicState(){return {sides:Object.fromEntries(['left','right'].map(side=>{const item=this.workspace.sides[side];return [side,item?{object:item.object,workbook:item.summary?{filename:item.filename,...item.summary}:null}:null];})),labels:this.workspace.labels,selectedLabels:this.workspace.selectedLabels,columns:this.workspace.columns,validation:this.workspace.validation,status:this.status(),backup:this.workspace.lastReplacementId?this.readJob(this.workspace.lastReplacementId):null};}
   invalidate(){this.workspace.validation=null;this.save();}
+  clear(){
+    this.workspace={sides:{left:null,right:null},labels:[],selectedLabels:[],columns:null,validation:null,lastJobId:null,lastReplacementId:null};
+    this.job=null;
+    this.save();
+    return this.publicState();
+  }
+  clearSide(side){
+    if(this.workspace.sides[side]){
+      this.workspace.sides[side]=null;
+      this.workspace.labels=[];
+      this.workspace.selectedLabels=[];
+      this.workspace.columns=null;
+      this.invalidate();
+    }
+    return this.publicState();
+  }
+  resetJob(){
+    this.job={running:false,phase:'idle',removed:0,created:0,logs:[]};
+    if(this.workspace.lastJobId){
+      this.db.prepare('DELETE FROM association_jobs WHERE id=?').run(this.workspace.lastJobId);
+      this.workspace.lastJobId=null;
+      this.save();
+    }
+    return this.publicState();
+  }
   async object(side,id){
     const object=await this.rt.hubspot.portal.object(id);
     this.assertMutable();

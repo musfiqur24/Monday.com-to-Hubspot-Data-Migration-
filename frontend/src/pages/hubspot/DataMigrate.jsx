@@ -162,13 +162,15 @@ export function DataMigrate({ onShowToast }) {
   }, [toast]);
 
   // ── Load properties ────────────────────────────────────────────────────────
-  const loadProperties = useCallback(async (suggest = false) => {
-    if (!selectedObject) throw new Error('Choose a destination object from the portal first.');
-    const props = await request(`/api/hubspot/properties/${encodeURIComponent(selectedObject.objectTypeId)}`);
+  const loadProperties = useCallback(async (suggest = false, targetObj = null, targetWb = null) => {
+    const obj = targetObj || selectedObject;
+    if (!obj) throw new Error('Choose a destination object from the portal first.');
+    const props = await request(`/api/hubspot/properties/${encodeURIComponent(obj.objectTypeId)}`);
     setProperties(props);
-    if (suggest && workbook) {
+    const wb = targetWb || workbook;
+    if (suggest && wb) {
       const autoMap = Object.fromEntries(
-        workbook.columns.map((col) => [
+        wb.columns.map((col) => [
           col.name,
           props.find((p) =>
             !p.modificationMetadata?.readOnlyValue && !p.calculated &&
@@ -177,8 +179,8 @@ export function DataMigrate({ onShowToast }) {
         ])
       );
       setMapping(autoMap);
-      const identity = workbook.columns.find((c) => /^(recordid|hsobjectid)$/.test(normalize(c.name))) ??
-        workbook.columns.find((c) => selectedObject.objectTypeId === '0-1' && normalize(c.name) === 'email');
+      const identity = wb.columns.find((c) => /^(recordid|hsobjectid)$/.test(normalize(c.name))) ??
+        wb.columns.find((c) => obj.objectTypeId === '0-1' && normalize(c.name) === 'email');
       if (identity) {
         setIdentifierColumn(identity.name);
         setIdProperty(normalize(identity.name) === 'email' ? 'email' : 'hs_object_id');
@@ -203,6 +205,15 @@ export function DataMigrate({ onShowToast }) {
   useEffect(() => {
     if (loaded) return;
     action(async () => {
+      const isReload = window.performance?.getEntriesByType?.('navigation')?.[0]?.type === 'reload';
+      if (isReload) {
+        try {
+          const currentStatus = await request(ep('status'));
+          if (!currentStatus?.running && currentStatus?.phase !== 'idle') {
+            await request(ep('reset'), 'POST', {});
+          }
+        } catch { /* ignore */ }
+      }
       const result = await request(ep('state'));
       setLoaded(true);
       setWorkbook(result.workbook);
@@ -219,17 +230,18 @@ export function DataMigrate({ onShowToast }) {
       }
       if (result.status) applyJob(result.status);
       if (result.workbook && result.selectedObject && result.credentialsConfigured) {
-        try { await loadProperties(!result.config); if (result.config) setDirty(false); }
+        try { await loadProperties(!result.config, result.selectedObject, result.workbook); if (result.config) setDirty(false); }
         catch (e) { toast(e.message, 'error'); }
       }
-      if (result.status?.running || (result.status?.phase && result.status.phase !== 'idle')) setStep(3);
+      if (result.status?.running) setStep(3);
+      else setStep(0);
     }, 'Loading workspace…');
   }, []); // eslint-disable-line
 
   function applyJob(j) {
     setJob(j);
-    if (j.review) setReview(j.review);
-    if (j.logs?.length) setLogs(j.logs.map((e) => ({ ...e, level: e.level ?? 'info' })));
+    setReview(j?.review || null);
+    setLogs((j?.logs || []).map((e) => ({ ...e, level: e.level ?? 'info' })));
   }
 
   // ── Poll when running ──────────────────────────────────────────────────────
@@ -247,7 +259,7 @@ export function DataMigrate({ onShowToast }) {
     await action(async () => {
       if (target > 0 && (!workbook || !selectedObject)) throw new Error('Select a portal object and upload a workbook first.');
       if (step === 1 && dirty) await save();
-      if (target > 0 && !properties.length) await loadProperties(Object.keys(mapping).length === 0);
+      if (target > 0 && !properties.length) await loadProperties(Object.keys(mapping).length === 0, selectedObject, workbook);
       setStep(target);
     }, target === 1 ? 'Loading HubSpot properties & preparing column mappings...' :
         target === 2 ? 'Saving mappings & preparing validation review...' : 'Loading run monitor...');
@@ -262,7 +274,7 @@ export function DataMigrate({ onShowToast }) {
       setProperties([]); setMapping({}); setIdentifierColumn(''); setIdProperty('hs_object_id');
       setAssociations((a) => a.map((link) => ({ ...link, typeId: null, labels: null })));
       invalidate();
-      if (workbook) await loadProperties(true);
+      if (workbook) await loadProperties(true, result.selectedObject, workbook);
     }, 'Updating destination object & loading portal schema...');
   }, [workbook, loadProperties, action]);
 
@@ -277,9 +289,9 @@ export function DataMigrate({ onShowToast }) {
       setWorkbook(result.workbook); setMapping({}); setIdentifierColumn(''); setIdProperty('hs_object_id');
       invalidate();
       toast('Workbook ready. Continue to map columns.', 'success');
-      try { await loadProperties(true); } catch (e) { toast(`Workbook uploaded. ${e.message}`, 'error'); }
+      try { await loadProperties(true, selectedObject, result.workbook); } catch (e) { toast(`Workbook uploaded. ${e.message}`, 'error'); }
     }, 'Uploading workbook & analyzing columns...');
-  }, [loadProperties, toast, action]);
+  }, [loadProperties, toast, action, selectedObject]);
 
   // ── Validate ───────────────────────────────────────────────────────────────
   const handleValidate = useCallback(async () => {
@@ -347,9 +359,25 @@ export function DataMigrate({ onShowToast }) {
 
   const handleReset = useCallback(async () => {
     await action(async () => {
-      applyJob(await request(ep('reset'), 'POST', {}));
+      const res = await request(ep('reset'), 'POST', {});
+      applyJob(res);
+      setReview(null);
+      setLogs([]);
+      setStep(0);
       toast('Run state reset to ready.', 'success');
     }, 'Resetting run state...');
+  }, [action, toast]);
+
+  const handleClearWorkbook = useCallback(async () => {
+    await action(async () => {
+      await request(ep('workbook'), 'DELETE');
+      setWorkbook(null);
+      setSelectedFileName('');
+      if (fileRef.current) fileRef.current.value = '';
+      setMapping({});
+      setReview(null);
+      toast('Workbook removed.', 'success');
+    }, 'Removing workbook...');
   }, [action, toast]);
 
   const writable = properties.filter((p) => !p.calculated && !p.modificationMetadata?.readOnlyValue && !p.externalOptions && p.name !== 'hs_object_id');
@@ -433,8 +461,16 @@ export function DataMigrate({ onShowToast }) {
                 Use selected file
               </button>
               {workbook && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-[12px] text-emerald-800 font-medium">
-                  {workbook.filename} · {workbook.rows.toLocaleString()} rows · {workbook.columns.length} columns
+                <div className="flex items-center justify-between p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-[12px] text-emerald-800 font-medium">
+                  <span className="truncate">{workbook.filename} · {workbook.rows.toLocaleString()} rows · {workbook.columns.length} columns</span>
+                  <button
+                    type="button"
+                    onClick={handleClearWorkbook}
+                    disabled={busy}
+                    className="ml-2 text-rose-500 hover:text-rose-700 hover:bg-rose-100/50 px-2 py-0.5 rounded transition text-[11px] font-semibold cursor-pointer shrink-0"
+                  >
+                    ✕ Remove
+                  </button>
                 </div>
               )}
             </div>

@@ -24,6 +24,9 @@ export function associations(rt,imports){
       res.json(await service.workbook(req.params.side,destination,extension,path.basename(req.file.originalname)));
     }catch(error){if(destination)await fs.unlink(destination).catch(()=>{});throw error;}finally{await fs.unlink(req.file.path).catch(()=>{});}
   });
+  router.post('/clear',mutable,(req,res)=>res.json(service.clear()));
+  router.post('/reset',mutable,(req,res)=>res.json(service.resetJob()));
+  router.delete('/workbook/:side',mutable,(req,res)=>res.json(service.clearSide(req.params.side)));
   router.post('/sheet/:side',mutable,async(req,res)=>{const item=service.workspace.sides[req.params.side];if(!item?.file||typeof req.body?.sheet!=='string')throw fail('Upload a file and choose its worksheet.');res.json(await service.workbook(req.params.side,item.file,item.extension,item.filename,req.body.sheet));});
   router.post('/labels',mutable,async(req,res)=>res.json(await service.labels()));
   router.put('/labels',mutable,(req,res)=>res.json(service.selectLabels(req.body?.keys)));

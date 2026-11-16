@@ -47,6 +47,10 @@ export function hubspotMigration(rt) {
     } catch(error) {if(destination) await fs.unlink(destination).catch(()=>{});throw error;}
     finally {await fs.unlink(req.file.path).catch(()=>{});}
   });
+  router.delete('/:mode/workbook',mutable,async(req,res)=>{
+    service.clearWorkbook(req.params.mode);
+    res.json(sessionResponse(req.params.mode));
+  });
   router.post('/:mode/sheet',mutable,async(req,res)=>{
     const session=service.get(req.params.mode);
     if(!session) throw fail('Choose a workbook first.');

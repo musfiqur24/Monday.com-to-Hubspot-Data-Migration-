@@ -96,7 +96,7 @@ function Btn({ children, onClick, disabled, variant = 'primary', size = 'md', ic
   );
 }
 
-function FileUploadZone({ side, workbook, onUpload, busy }) {
+function FileUploadZone({ side, workbook, onUpload, onRemoveWorkbook, busy }) {
   const ref = useRef();
   const [dragging, setDragging] = useState(false);
 
@@ -109,7 +109,7 @@ function FileUploadZone({ side, workbook, onUpload, busy }) {
 
   return (
     <div
-      className={`border-2 border-dashed rounded-xl p-5 text-center transition cursor-pointer
+      className={`relative border-2 border-dashed rounded-xl p-5 text-center transition cursor-pointer
         ${dragging ? 'border-[#ff7a59] bg-orange-50' : 'border-slate-200 hover:border-[#ff7a59]/50 hover:bg-slate-50'}
         ${busy ? 'opacity-60 pointer-events-none' : ''}`}
       onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -121,6 +121,19 @@ function FileUploadZone({ side, workbook, onUpload, busy }) {
         onChange={(e) => handleFile(e.target.files[0])} />
       {workbook ? (
         <div className="flex flex-col items-center gap-1">
+          {onRemoveWorkbook && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemoveWorkbook(side);
+              }}
+              className="absolute top-2 right-2 p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full transition cursor-pointer"
+              title="Remove workbook"
+            >
+              ✕
+            </button>
+          )}
           <FileSpreadsheet size={22} className="text-[#ff7a59]" />
           <p className="text-[12.5px] font-semibold text-slate-700 mt-1 truncate max-w-full">{workbook.filename}</p>
           <p className="text-[11.5px] text-slate-400">{workbook.rows?.toLocaleString()} rows · {workbook.columns?.length} columns</p>
@@ -187,7 +200,7 @@ function PreviewTable({ data, caption }) {
 
 // ─── Step 0: Objects & Files ──────────────────────────────────────────────────
 function Step0({
-  state, objects, onPickObject, onUpload, onSheetChange,
+  state, objects, onPickObject, onUpload, onRemoveWorkbook, onSheetChange,
   onFetchLabels, onToggleLabel, busy,
 }) {
   const { sides, labels, selectedLabels } = state;
@@ -216,6 +229,7 @@ function Step0({
               side={side}
               workbook={s?.workbook}
               onUpload={onUpload}
+              onRemoveWorkbook={onRemoveWorkbook}
               busy={busy}
             />
             <SheetPicker
@@ -481,7 +495,7 @@ function Step2({ state, onRunPreflight, busy }) {
 }
 
 // ─── Step 3: Run & Monitor ────────────────────────────────────────────────────
-function Step3({ state, onRun, onCancel, onDownloadReport, onDownloadBackup, onRestore, busy }) {
+function Step3({ state, onRun, onCancel, onDownloadReport, onDownloadBackup, onRestore, onReset, busy }) {
   const { status, validation, backup } = state;
   const [dryRun, setDryRun] = useState(true);
   const [confirmRun, setConfirmRun] = useState('');
@@ -581,6 +595,11 @@ function Step3({ state, onRun, onCancel, onDownloadReport, onDownloadBackup, onR
               {(status.phase === 'complete' || status.phase === 'failed') && (
                 <Btn onClick={onDownloadReport} variant="secondary" size="sm" icon={<Download size={12} />}>
                   Download report
+                </Btn>
+              )}
+              {!isRunning && status.phase !== 'idle' && onReset && (
+                <Btn onClick={onReset} variant="secondary" size="sm" icon={<RotateCcw size={12} />}>
+                  Reset run state
                 </Btn>
               )}
             </div>
@@ -706,8 +725,17 @@ export function AssociationMigration({ onShowToast }) {
   // ── Load initial state ───────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
+    const isReload = window.performance?.getEntriesByType?.('navigation')?.[0]?.type === 'reload';
     (async () => {
       try {
+        if (isReload) {
+          try {
+            const cur = await request(ep('status'), 'GET');
+            if (!cur?.running && cur?.phase !== 'idle') {
+              await request(ep('reset'), 'POST', {});
+            }
+          } catch { /* ignore */ }
+        }
         const [serverState, objectsRes] = await Promise.all([
           request(ep('state'), 'GET'),
           request('/api/hubspot/objects', 'GET'),
@@ -716,6 +744,7 @@ export function AssociationMigration({ onShowToast }) {
         setState((prev) => ({
           ...prev,
           loaded: true,
+          step: 0,
           objects: objectsRes?.objects ?? [],
           sides: serverState?.sides ?? prev.sides,
           labels: serverState?.labels ?? [],
@@ -856,6 +885,23 @@ export function AssociationMigration({ onShowToast }) {
     onShowToast?.('Restore initiated.', 'success');
   }, [onShowToast]);
 
+  const handleRemoveWorkbook = useCallback((side) => {
+    withBusy(async () => {
+      const serverState = await request(ep(`workbook/${side}`), 'DELETE');
+      mergeServerState(serverState);
+      onShowToast?.(`${side === 'left' ? 'Source' : 'Target'} workbook removed.`, 'success');
+    }, `Failed to remove ${side} workbook`);
+  }, [withBusy, mergeServerState, onShowToast]);
+
+  const handleResetJob = useCallback(() => {
+    withBusy(async () => {
+      const serverState = await request(ep('reset'), 'POST', {});
+      mergeServerState(serverState);
+      setState((prev) => ({ ...prev, step: 0 }));
+      onShowToast?.('Run state reset to ready.', 'success');
+    }, 'Failed to reset run state');
+  }, [withBusy, mergeServerState, onShowToast]);
+
   // ── Stepper logic ────────────────────────────────────────────────────────────
   const canAdvance = useCallback((step) => {
     const { sides, columns, validation } = state;
@@ -896,6 +942,7 @@ export function AssociationMigration({ onShowToast }) {
             objects={objects}
             onPickObject={handlePickObject}
             onUpload={handleUpload}
+            onRemoveWorkbook={handleRemoveWorkbook}
             onSheetChange={handleSheetChange}
             onFetchLabels={handleFetchLabels}
             onToggleLabel={handleToggleLabel}
@@ -915,6 +962,7 @@ export function AssociationMigration({ onShowToast }) {
             onDownloadReport={handleDownloadReport}
             onDownloadBackup={handleDownloadBackup}
             onRestore={handleRestore}
+            onReset={handleResetJob}
             busy={busy}
           />
         );
