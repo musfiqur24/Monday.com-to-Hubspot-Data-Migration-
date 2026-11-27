@@ -9,7 +9,7 @@ import {fail} from '../lib/sanitize.js';
 export function associations(rt,imports){
   const router=Router(),service=new AssociationReplacement(rt);rt.associationReplacement=service;
   service.imports=imports;
-  const upload=multer({dest:path.join(rt.root,'tmp'),limits:{fileSize:50*1024**2,files:1,fields:0}});
+  const upload=multer({dest:path.join(rt.root,'tmp'),limits:{fileSize:rt.config.maxBytes||(500*1024**2),files:1,fields:0}});
   const mutable=(req,res,next)=>{if(service.busy()||imports.busy()||rt.migration.status.running)return res.status(409).json({error:'A migration is running. Wait until it finishes before changing this association job.'});next();};
   router.param('side',(req,res,next,side)=>['left','right'].includes(side)?next():res.status(404).json({error:'Unknown association file side.'}));
   router.get('/state',(req,res)=>res.json(service.publicState()));

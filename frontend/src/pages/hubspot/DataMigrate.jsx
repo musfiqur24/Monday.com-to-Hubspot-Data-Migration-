@@ -287,7 +287,7 @@ export function DataMigrate({ onShowToast }) {
     await action(async () => {
       const file = fileRef.current?.files[0];
       if (!file) return;
-      if (!/\.(csv|xlsx)$/i.test(file.name) || file.size > 50 * 1024 ** 2) throw new Error('Choose a CSV or XLSX workbook up to 50 MB.');
+      if (!/\.(csv|xlsx)$/i.test(file.name) || file.size > 500 * 1024 ** 2) throw new Error('Choose a CSV or XLSX workbook up to 500 MB.');
       const form = new FormData(); form.append('file', file);
       const result = await request(ep('workbook'), 'POST', form);
       setWorkbook(result.workbook); setMapping({}); setIdentifierColumn(''); setIdProperty('hs_object_id');
@@ -455,7 +455,7 @@ export function DataMigrate({ onShowToast }) {
               <label className="flex flex-col items-center gap-3 p-6 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-[#ff7a59]/40 hover:bg-orange-50/30 transition">
                 <Upload className="w-8 h-8 text-slate-300" />
                 <span className="font-semibold text-slate-700 text-[13px]">Select your workbook</span>
-                <span className="text-[11.5px] text-slate-400">CSV or XLSX · up to 50 MB</span>
+                <span className="text-[11.5px] text-slate-400">CSV or XLSX · up to 500 MB</span>
                 <input ref={fileRef} type="file" accept=".csv,.xlsx" className="sr-only"
                   onChange={(e) => setSelectedFileName(e.target.files[0]?.name ?? '')} />
               </label>

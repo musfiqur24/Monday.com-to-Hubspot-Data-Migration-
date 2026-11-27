@@ -86,7 +86,7 @@
   for(const side of ['left','right']){
     $(`${side}-object`).onchange=()=>action(async()=>{if(!$(`${side}-object`).value)return;const data=await request(`object/${side}`,'PUT',{objectTypeId:$(`${side}-object`).value});$(`${side}-file`).value='';apply(data);});
     $(`${side}-file`).onchange=controls;
-    $(`${side}-upload`).onclick=()=>action(async()=>{const file=$(`${side}-file`).files[0];if(!file||file.size>50*1024**2||!(/\.(csv|xlsx)$/i.test(file.name)))throw new Error('Choose a CSV or XLSX file up to 50 MB.');const form=new FormData();form.append('file',file);apply(await request(`workbook/${side}`,'POST',form));window.UI.toast('File uploaded.','success');});
+    $(`${side}-upload`).onclick=()=>action(async()=>{const file=$(`${side}-file`).files[0];if(!file||file.size>500*1024**2||!(/\.(csv|xlsx)$/i.test(file.name)))throw new Error('Choose a CSV or XLSX file up to 500 MB.');const form=new FormData();form.append('file',file);apply(await request(`workbook/${side}`,'POST',form));window.UI.toast('File uploaded.','success');});
     $(`${side}-sheet`).onchange=()=>action(async()=>apply(await request(`sheet/${side}`,'POST',{sheet:$(`${side}-sheet`).value})));
     $(`${side}-column`).onchange=()=>{state.columns[side]=$(`${side}-column`).value;state.validation=null;state.review=null;state.dirty=true;controls();};
   }

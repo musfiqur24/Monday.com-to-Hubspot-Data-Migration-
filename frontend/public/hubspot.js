@@ -811,7 +811,7 @@
     $('file').onchange=()=>{$('selected').textContent=$('file').files[0]?.name||'No file selected';controls();};
     $('upload').onclick=()=>action(async()=>{
       const file=$('file').files[0];if(!file)return;
-      if(!/\.(csv|xlsx)$/i.test(file.name)||file.size>50*1024**2)throw new Error('Choose a CSV or XLSX workbook up to 50 MB.');
+      if(!/\.(csv|xlsx)$/i.test(file.name)||file.size>500*1024**2)throw new Error('Choose a CSV or XLSX workbook up to 500 MB.');
       const form=new FormData();form.append('file',file);
       const result=await request(endpoint('workbook'),'POST',form);state.workbook=result.workbook;state.mapping={};state.identifierColumn='';state.idProperty='hs_object_id';invalidate();renderWorkbook();notice('Workbook ready. Continue to map columns.');
       try{await loadProperties(true);}catch(error){notice(`Workbook uploaded. ${error.message}`,true);}

@@ -12,7 +12,7 @@ export function hubspotMigration(rt) {
   const router=Router(), service=new HubspotImport(rt);
   router.use('/associations',associations(rt,service));
   router.use('/schema',schemaRoutes(rt));
-  const upload=multer({dest:path.join(rt.root,'tmp'),limits:{fileSize:50*1024**2,files:1,fields:0}});
+  const upload=multer({dest:path.join(rt.root,'tmp'),limits:{fileSize:rt.config.maxBytes||(500*1024**2),files:1,fields:0}});
   router.param('mode',(req,res,next,mode)=>{
     if(mode!=='data-migrate') return res.status(404).json({error:'Use the association-only workflow for association jobs.'});
     next();
