@@ -94,9 +94,11 @@ export class HubspotImport {
   }
   async selectObject(mode,type) {
     const selectedObject=await this.rt.hubspot.portal.object(type), prior=this.get(mode)||{};
-    const same=prior.selectedObject?.objectTypeId===selectedObject.objectTypeId&&prior.selectedObject?.portalId===selectedObject.portalId;
-    if(!same){this.jobs.delete(mode);this.db.prepare('DELETE FROM hubspot_jobs WHERE mode=?').run(mode);}
-    this.save(mode,{...prior,selectedObject,config:same?prior.config:null});
+    const sameObject=prior.selectedObject?.objectTypeId===selectedObject.objectTypeId;
+    const samePortal=prior.selectedObject?.portalId===selectedObject.portalId;
+    if(!samePortal){this.jobs.delete(mode);this.db.prepare('DELETE FROM hubspot_jobs WHERE mode=?').run(mode);}
+    // Preserve existing column mappings if mapping to the same object type
+    this.save(mode,{...prior,selectedObject,config:sameObject?prior.config:null});
     return selectedObject;
   }
   async workbook(mode,file,extension,filename,sheet) {
@@ -118,7 +120,9 @@ export class HubspotImport {
     if(mode==='data-migrate' && config.associations.length) throw fail('Use Data Migrate with Association to configure relationships.');
     if(mode==='data-migrate-association' && !config.associations.length) throw fail('Configure at least one association.');
     const session=this.get(mode); if(!session?.file) throw fail('Choose a workbook first.');
-    if(session.selectedObject?.objectTypeId!==selectedObject.objectTypeId||session.selectedObject?.portalId!==selectedObject.portalId)throw fail('The selected object or portal changed. Select it again and remap your columns.');
+    if(session.selectedObject?.objectTypeId && session.selectedObject.objectTypeId !== selectedObject.objectTypeId) {
+      throw fail('The selected object type changed. Choose the object again.');
+    }
     this.save(mode,{...session,selectedObject,config}); return config;
   }
   async plan(mode, { allIssues = false } = {}) {
@@ -128,14 +132,53 @@ export class HubspotImport {
     const config=importSchema.parse(session.config);
     config.objectType=objectTypeId(config.objectType);
     const selected=await this.rt.hubspot.portal.object(config.objectType);
-    if(session.selectedObject?.portalId!==selected.portalId)throw fail('The saved workbook belongs to a different portal. Select the object and remap this workbook for the configured portal.');
+    if(session.selectedObject?.portalId !== selected.portalId) {
+      session.selectedObject = selected;
+      this.save(mode, session);
+    }
     for(const association of config.associations)association.objectType=objectTypeId(association.objectType);
     const workbook=await readHubspotWorkbook(session.file,session.extension,session.summary.sheet);
     const properties=await this.properties(config.objectType), byName=new Map(properties.map(property=>[property.name,property]));
-    const issues=[]; let issueCount=0;
+    const rawIssues=[]; const uniqueIssues=new Map(); let issueCount=0;
     const issue=(row,message,column='',value='',identifier='')=>{
       issueCount++;
-      if(allIssues||issues.length<100)issues.push({row,message,column,value,identifier});
+      const cleanCol=column ? String(column).trim() : '';
+      let cleanMsg=String(message || 'Validation error').trim();
+      if(cleanCol && cleanMsg.startsWith(`${cleanCol}: `)) {
+        cleanMsg=cleanMsg.slice(cleanCol.length + 2).trim();
+      }
+      const key=`${cleanCol}:::${cleanMsg}`;
+      let agg=uniqueIssues.get(key);
+      if(!agg) {
+        agg={
+          column: cleanCol || 'General',
+          message: cleanMsg,
+          count: 0,
+          sampleValues: [],
+          exampleRows: [],
+          identifier: identifier || '',
+        };
+        uniqueIssues.set(key, agg);
+      }
+      agg.count++;
+      if(row != null && agg.exampleRows.length < 10 && !agg.exampleRows.includes(row)) {
+        agg.exampleRows.push(row);
+      }
+      if(value !== '' && value != null && agg.sampleValues.length < 5) {
+        const valStr=String(value).trim();
+        if(valStr && !agg.sampleValues.includes(valStr)) {
+          agg.sampleValues.push(valStr);
+        }
+      }
+      if(allIssues||rawIssues.length<100) {
+        rawIssues.push({
+          row,
+          message: cleanCol ? `${cleanCol}: ${cleanMsg}` : cleanMsg,
+          column: cleanCol || 'General',
+          value,
+          identifier
+        });
+      }
     };
     if(!workbook.columns.includes(config.identifierColumn)) issue(null,'Select a valid record identifier column.',config.identifierColumn);
     const identifier=byName.get(config.idProperty);
@@ -159,17 +202,21 @@ export class HubspotImport {
     const records=new Map(), related=new Set(), account=hash(this.rt.config.hubspotToken);
     for(const row of workbook.rows) {
       let id=row.values[config.identifierColumn]?.trim();
-      if(config.objectType==='0-1' && config.idProperty==='email') id=id?.toLowerCase();
+      if(config.objectType==='0-1' && config.idProperty==='email' && id) {
+        id = id.replace(/[\u200B-\u200F\uFEFF\u202A-\u202E]/g, '').trim().toLowerCase().replace(/\.+$/, '');
+      }
       if(!id) {issue(row.number,'Record identifier is empty.',config.identifierColumn,'','');continue;}
       if(config.idProperty==='hs_object_id'&&!/^\d+$/.test(id)) issue(row.number,'Record ID must be numeric.',config.identifierColumn,id,id);
       if(config.idProperty==='email'&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(id)) issue(row.number,'Email identifier is invalid.',config.identifierColumn,id,id);
       const values=Object.create(null);
       for(const [column,target] of mappings) {
         const raw=row.values[column]; if(!raw || !byName.has(target)) continue;
-        try {values[target]=propertyValue(raw,byName.get(target));} catch(error) {issue(row.number,`${column}: ${safeError(error)}`,column,raw,id);}
+        try {values[target]=propertyValue(raw,byName.get(target));} catch(error) {issue(row.number,safeError(error),column,raw,id);}
       }
       if(config.idProperty!=='hs_object_id') {
-        if(config.objectType==='0-1'&&config.idProperty==='email'&&values.email)values.email=values.email.toLowerCase().trim();
+        if(config.objectType==='0-1'&&config.idProperty==='email'&&values.email) {
+          values.email = values.email.replace(/[\u200B-\u200F\uFEFF\u202A-\u202E]/g, '').trim().toLowerCase().replace(/\.+$/, '');
+        }
         if(values[config.idProperty] && values[config.idProperty]!==id) issue(row.number,'Mapped identifier differs from the selected match column.',config.identifierColumn,values[config.idProperty],id);
         values[config.idProperty]=id;
       }
@@ -189,7 +236,7 @@ export class HubspotImport {
         Object.assign(previous.properties,values);previous.links.push(...links);previous.rows.push(row.number);
       } else records.set(id,{id,properties:values,links,rows:[row.number]});
     }
-    if(issueCount) return {config,records:[],summary:{rows:workbook.rows.length,records:records.size,associations:0,existing:0,creating:0,issueCount,issues}};
+    if(issueCount) return {config,records:[],summary:{rows:workbook.rows.length,records:records.size,associations:0,existing:0,creating:0,issueCount,issues:rawIssues,uniqueIssues:Array.from(uniqueIssues.values())}};
     let existing=0, creating=0;
     const recordList=[...records.values()];
 
@@ -273,35 +320,45 @@ export class HubspotImport {
       const schema=await this.rt.hubspot.request(`/crm-object-schemas/2026-09/schemas/${enc(config.objectType)}`);
       required.push(...(schema.requiredProperties||[]));
     }
-    for(const record of records.values()) if(!record.remoteId) for(const name of required) if(!record.properties[name]) issue(record.rows[0],`New records require ${name}.`,'','',record.id);
+    for(const record of records.values()) if(!record.remoteId) for(const name of required) if(!record.properties[name]) {
+      const mappedCol = Object.entries(config.mapping).find(([, prop]) => prop === name)?.[0];
+      issue(record.rows[0],`New records require property "${name}".`,mappedCol || name,'',record.id);
+    }
     for(const value of related) {
       try {await this.rt.hubspot.request(`/crm/objects/2026-09/${value}`,{silent:true});}
-      catch(error) {if(error.status!==404)throw error;issue(null,'An associated destination record was not found.','',value);}
+      catch(error) {if(error.status!==404)throw error;issue(null,'An associated destination record was not found.','Associations',value);}
     }
     let associations=0;
     for(const record of records.values()) {
       record.links=[...new Map(record.links.map(link=>[JSON.stringify(link),link])).values()];associations+=record.links.length;
       record.key=hash([account,config.objectType,config.idProperty,record.id,record.properties,record.links]);
     }
-    return {config,account,definitions:byName,records:[...records.values()],summary:{rows:workbook.rows.length,records:records.size,associations,existing,creating,issueCount,issues}};
+    return {config,account,definitions:byName,records:[...records.values()],summary:{rows:workbook.rows.length,records:records.size,associations,existing,creating,issueCount,issues:rawIssues,uniqueIssues:Array.from(uniqueIssues.values())}};
   }
   async issuesCsv(mode) {
     const session=this.sessions.get(mode);
     if(!session)throw fail('Choose a workbook first.');
     if(!session.config)throw fail('Map columns and record matching before downloading issues.');
     const plan=await this.plan(mode,{allIssues:true});
-    const issues=plan.summary.issues||[];
-    const headers=['Row','Identifier','Column','Value','Error'];
+    const uniqueIssues=plan.summary.uniqueIssues||[];
+    const headers=['Reference Column','Error Message','Affected Rows Count','Sample Values','Example Rows'];
     const lines=[
       headers.map(csv).join(','),
-      ...issues.map(iss=>[iss.row??'',iss.identifier??'',iss.column??'',iss.value??'',iss.message??''].map(csv).join(','))
+      ...uniqueIssues.map(iss=>[
+        iss.column || 'General',
+        iss.message || '',
+        iss.count || 0,
+        (iss.sampleValues || []).slice(0, 5).join(' | '),
+        (iss.exampleRows || []).slice(0, 10).map(r=>`Row ${r}`).join(', ') + ((iss.count > (iss.exampleRows?.length || 0)) ? ` (+${iss.count - (iss.exampleRows?.length || 0)} more)` : '')
+      ].map(csv).join(','))
     ];
     const baseName=(session.filename||mode).replace(/\.[^/.]+$/,'');
     const filename=`validation-issues-${baseName}.csv`;
     return {
       filename,
       content:'\uFEFF'+lines.join('\r\n'),
-      count:plan.summary.issueCount
+      count:plan.summary.issueCount,
+      uniqueCount:uniqueIssues.length
     };
   }
   async verifyRecord(config,id,properties,definitions=new Map()) {
@@ -441,32 +498,28 @@ export class HubspotImport {
       let totalFailed = 0;
       let totalSkipped = 0;
 
-      for (let b = 0; b < totalBatches; b++) {
-        if (this.status(mode).cancelRequested) break;
+      const executeChunk = async (chunk) => {
+        if (!chunk.length) return { succeeded: [], failed: [] };
 
-        const batchRecords = records.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
-        const dbItems = [];
-        let batchSucceeded = 0;
-        let batchFailed = 0;
-
-        try {
-          const inputs = batchRecords.map(record => {
-            if (isRecordIdMatch) {
-              return {
-                id: record.id,
-                properties: record.properties
-              };
-            }
+        const inputs = chunk.map(record => {
+          if (isRecordIdMatch) {
             return {
-              idProperty: plan.config.idProperty,
               id: record.id,
               properties: record.properties
             };
-          });
+          }
+          return {
+            idProperty: plan.config.idProperty,
+            id: record.id,
+            properties: record.properties
+          };
+        });
 
+        try {
           const res = await this.rt.hubspot.request(endpointPath, {
             method: 'POST',
-            body: { inputs }
+            body: { inputs },
+            silent: chunk.length > 1
           });
 
           // Index returned results by match key
@@ -487,64 +540,116 @@ export class HubspotImport {
             }
           }
 
-          // Process batch associations if any
-          const associationInputs = [];
+          const succeeded = [];
+          const failed = [];
 
-          for (const record of batchRecords) {
+          for (const record of chunk) {
             const lookupKey = isRecordIdMatch ? record.id : record.id.toLowerCase().trim();
             const remoteId = resultMap.get(lookupKey) || (isRecordIdMatch ? record.id : null);
             const specificError = errorMap.get(lookupKey);
 
             if (remoteId && !specificError) {
               record.remoteId = remoteId;
-              batchSucceeded++;
-              dbItems.push({
-                key: record.key,
-                account: plan.account,
-                objectType: plan.config.objectType,
-                recordId: remoteId,
-                status: 'completed',
-                completedAt: new Date().toISOString()
-              });
-              outcomes.push({
-                rows: record.rows.join(';'),
-                object: plan.config.objectType,
-                record_id: remoteId,
-                status: 'completed',
-                associations: record.links.length,
-                error: ''
-              });
-
-              if (record.links?.length) {
-                for (const link of record.links) {
-                  associationInputs.push({
-                    fromId: remoteId,
-                    toObjectType: link.objectType,
-                    toId: link.id,
-                    definition: link.definition
-                  });
-                }
-              }
+              succeeded.push({ record, remoteId });
             } else {
-              const errMsg = specificError || 'HubSpot did not return a confirmation ID for this record.';
-              batchFailed++;
-              dbItems.push({
-                key: record.key,
-                account: plan.account,
-                objectType: plan.config.objectType,
-                recordId: remoteId || null,
-                status: 'failed',
-                completedAt: null
-              });
-              outcomes.push({
-                rows: record.rows.join(';'),
-                object: plan.config.objectType,
-                record_id: remoteId || '',
-                status: 'failed',
-                associations: record.links.length,
-                error: errMsg
+              failed.push({
+                record,
+                error: specificError || 'HubSpot did not return a confirmation ID for this record.'
               });
             }
+          }
+
+          return { succeeded, failed };
+        } catch (batchErr) {
+          // If destination portal reached account limit (HTTP 402), rethrow so execution stops
+          if (batchErr.status === 402) throw batchErr;
+
+          // If chunk failed with a client/payload error (4xx) and has multiple records,
+          // divide-and-conquer: split chunk so the invalid records don't fail the valid ones!
+          if (chunk.length > 1 && batchErr.status && batchErr.status < 500) {
+            const mid = Math.ceil(chunk.length / 2);
+            const left = chunk.slice(0, mid);
+            const right = chunk.slice(mid);
+
+            const leftRes = await executeChunk(left);
+            const rightRes = await executeChunk(right);
+
+            return {
+              succeeded: [...leftRes.succeeded, ...rightRes.succeeded],
+              failed: [...leftRes.failed, ...rightRes.failed]
+            };
+          }
+
+          // Single record failed or server error: record as failed
+          const errMsg = safeError(batchErr);
+          return {
+            succeeded: [],
+            failed: chunk.map(record => ({ record, error: errMsg }))
+          };
+        }
+      };
+
+      for (let b = 0; b < totalBatches; b++) {
+        if (this.status(mode).cancelRequested) break;
+
+        const batchRecords = records.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+        const dbItems = [];
+        let batchSucceeded = 0;
+        let batchFailed = 0;
+        const associationInputs = [];
+
+        try {
+          const chunkRes = await executeChunk(batchRecords);
+
+          for (const { record, remoteId } of chunkRes.succeeded) {
+            batchSucceeded++;
+            dbItems.push({
+              key: record.key,
+              account: plan.account,
+              objectType: plan.config.objectType,
+              recordId: remoteId,
+              status: 'completed',
+              completedAt: new Date().toISOString()
+            });
+            outcomes.push({
+              rows: record.rows.join(';'),
+              object: plan.config.objectType,
+              record_id: remoteId,
+              status: 'completed',
+              associations: record.links.length,
+              error: ''
+            });
+
+            if (record.links?.length) {
+              for (const link of record.links) {
+                associationInputs.push({
+                  fromId: remoteId,
+                  toObjectType: link.objectType,
+                  toId: link.id,
+                  definition: link.definition
+                });
+              }
+            }
+          }
+
+          for (const { record, error } of chunkRes.failed) {
+            batchFailed++;
+            dbItems.push({
+              key: record.key,
+              account: plan.account,
+              objectType: plan.config.objectType,
+              recordId: record.remoteId || null,
+              status: 'failed',
+              completedAt: null
+            });
+            outcomes.push({
+              rows: record.rows.join(';'),
+              object: plan.config.objectType,
+              record_id: record.remoteId || '',
+              status: 'failed',
+              associations: record.links.length,
+              error
+            });
           }
 
           // Send associations in batch if any exist
@@ -579,6 +684,20 @@ export class HubspotImport {
           }
         } catch (batchErr) {
           const errMsg = safeError(batchErr);
+          if (batchErr.status === 402) {
+            saveMany(dbItems);
+            totalProcessed += batchRecords.length;
+            totalFailed += batchRecords.length;
+            this.progress(mode, {
+              completed: totalProcessed,
+              succeeded: totalSucceeded,
+              failed: totalFailed,
+              skipped: totalSkipped,
+              error: errMsg
+            }, `Batch ${b + 1} of ${totalBatches} halted: ${errMsg}`);
+            break;
+          }
+
           batchFailed += batchRecords.length;
           for (const record of batchRecords) {
             dbItems.push({
@@ -597,21 +716,6 @@ export class HubspotImport {
               associations: record.links.length,
               error: errMsg
             });
-          }
-
-          // If the destination portal has reached its account tier / contact limit (HTTP 402), stop further batches
-          if (batchErr.status === 402) {
-            saveMany(dbItems);
-            totalProcessed += batchRecords.length;
-            totalFailed += batchFailed;
-            this.progress(mode, {
-              completed: totalProcessed,
-              succeeded: totalSucceeded,
-              failed: totalFailed,
-              skipped: totalSkipped,
-              error: errMsg
-            }, `Batch ${b + 1} of ${totalBatches} halted: ${errMsg}`);
-            break;
           }
         }
 

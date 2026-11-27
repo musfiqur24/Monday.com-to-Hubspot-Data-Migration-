@@ -169,14 +169,18 @@ export function DataMigrate({ onShowToast }) {
     setProperties(props);
     const wb = targetWb || workbook;
     if (suggest && wb) {
+      // Auto-map but enforce 1-to-1: first matched column wins, later duplicates are cleared
+      const usedProps = new Set();
       const autoMap = Object.fromEntries(
-        wb.columns.map((col) => [
-          col.name,
-          props.find((p) =>
+        wb.columns.map((col) => {
+          const match = props.find((p) =>
             !p.modificationMetadata?.readOnlyValue && !p.calculated &&
             (normalize(p.name) === normalize(col.name) || normalize(p.label) === normalize(col.name))
-          )?.name ?? ''
-        ])
+          )?.name ?? '';
+          if (match && usedProps.has(match)) return [col.name, ''];
+          if (match) usedProps.add(match);
+          return [col.name, match];
+        })
       );
       setMapping(autoMap);
       const identity = wb.columns.find((c) => /^(recordid|hsobjectid)$/.test(normalize(c.name))) ??
@@ -518,7 +522,7 @@ export function DataMigrate({ onShowToast }) {
           </article>
 
           {/* Column mapping */}
-          <article className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          <article className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
             <div className="flex items-start justify-between px-6 py-4 border-b border-slate-100">
               <div>
                 <h2 className="font-bold text-slate-800 text-[15px]">Column mapping</h2>
@@ -528,32 +532,66 @@ export function DataMigrate({ onShowToast }) {
                 {mappedCount} mapped{dups ? ` · ${dups} duplicate${dups > 1 ? 's' : ''}` : ''}
               </Badge>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12.5px]">
-                <thead className="bg-slate-50 border-b border-slate-200">
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+              <table className="w-full table-fixed text-[12.5px]">
+                <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-xs">
                   <tr>
-                    {['Workbook column', 'Sample values', 'HubSpot property'].map((h) => (
-                      <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
-                    ))}
+                    <th className="w-[28%] min-w-[180px] px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
+                      Workbook column
+                    </th>
+                    <th className="w-[32%] min-w-[200px] px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
+                      Sample values
+                    </th>
+                    <th className="w-[40%] min-w-[260px] px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
+                      HubSpot property
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {(workbook?.columns ?? []).map((col) => {
                     const val = mapping[col.name] ?? '';
-                    const dup = val && (Object.values(mapping).filter((v) => v === val).length > 1);
+                    // Show a warning only while user is in the act of selecting (before onChange auto-clears)
+                    const conflictCol = val
+                      ? Object.entries(mapping).find(([c, v]) => v === val && c !== col.name)?.[0]
+                      : null;
                     return (
-                      <tr key={col.name} className="hover:bg-slate-50">
-                        <td className="px-5 py-3 font-medium text-slate-800 whitespace-nowrap">{col.name}</td>
-                        <td className="px-5 py-3 text-slate-400 max-w-[200px] truncate">{col.samples?.filter(Boolean).join(' · ') || '—'}</td>
-                        <td className="px-5 py-3 min-w-[260px]">
-                          <PropertyPicker
-                            value={val}
-                            properties={writable}
-                            onChange={(name) => { setMapping((m) => ({ ...m, [col.name]: name })); invalidate(); }}
-                            disabled={busy}
-                            allowCreate
-                          />
-                          {dup && <p className="text-[11px] text-amber-600 mt-1">⚠ "{val}" mapped to multiple columns.</p>}
+                      <tr key={col.name} className="hover:bg-slate-50/80 transition">
+                        <td className="px-5 py-3 font-semibold text-slate-800 truncate" title={col.name}>
+                          {col.name}
+                        </td>
+                        <td className="px-5 py-3 text-slate-400 truncate text-[12px]" title={col.samples?.filter(Boolean).join(' · ') || ''}>
+                          {col.samples?.filter(Boolean).join(' · ') || <span className="italic">—</span>}
+                        </td>
+                        <td className="px-5 py-3">
+                          <div className="w-full">
+                            <PropertyPicker
+                              value={val}
+                              properties={writable}
+                              onChange={(name) => {
+                                setMapping((m) => {
+                                  const next = { ...m };
+                                  // Enforce 1-to-1: if this property is already assigned to another column, clear it there
+                                  if (name) {
+                                    for (const [otherCol, otherVal] of Object.entries(next)) {
+                                      if (otherVal === name && otherCol !== col.name) {
+                                        next[otherCol] = '';
+                                      }
+                                    }
+                                  }
+                                  next[col.name] = name;
+                                  return next;
+                                });
+                                invalidate();
+                              }}
+                              disabled={busy}
+                              allowCreate
+                            />
+                            {conflictCol && (
+                              <p className="text-[11px] text-amber-500 mt-1">
+                                ⚠ &quot;{val}&quot; was also on &quot;{conflictCol}&quot; — cleared there automatically.
+                              </p>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -561,7 +599,10 @@ export function DataMigrate({ onShowToast }) {
                 </tbody>
               </table>
             </div>
-            <div className="px-6 py-4 border-t border-slate-100">
+            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-xs text-slate-400">
+                {workbook?.columns?.length ?? 0} columns in workbook
+              </span>
               <button type="button" onClick={() => action(async () => { await save(); toast('Mappings saved.', 'success'); }, 'Saving column mappings...')}
                 disabled={busy}
                 className="px-4 py-2 rounded-lg border border-slate-200 text-[13px] font-medium text-slate-700 hover:bg-slate-50 transition cursor-pointer disabled:opacity-50">
@@ -609,27 +650,86 @@ export function DataMigrate({ onShowToast }) {
             {/* Results */}
             {review ? (
               <div className={`p-4 rounded-xl border ${review.issueCount ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'} mb-4`}>
-                <p className={`font-semibold text-[13px] ${review.issueCount ? 'text-red-800' : 'text-emerald-800'}`}>
-                  {review.issueCount ? `${review.issueCount} validation issue(s). Fix them before running.` : 'Validation passed. Ready for a dry preview or real migration.'}
-                </p>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <p className={`font-semibold text-[13.5px] ${review.issueCount ? 'text-red-800' : 'text-emerald-800'}`}>
+                    {review.issueCount
+                      ? `${review.issueCount.toLocaleString()} validation issue(s) detected across ${review.uniqueIssues?.length ?? (review.issues?.length || 0)} unique pattern(s). Fix them before running.`
+                      : 'Validation passed. Ready for a dry preview or real migration.'}
+                  </p>
+                  {review.issueCount > 0 && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-[11px] font-bold border border-red-300">
+                      Blocked
+                    </span>
+                  )}
+                </div>
+
                 <p className="text-[12px] text-slate-600 mt-1">
-                  {review.records} records · {review.existing} existing · {review.creating} to create · {review.associations ?? 0} associations
+                  {review.records.toLocaleString()} records · {review.existing.toLocaleString()} existing · {review.creating.toLocaleString()} to create · {review.associations ?? 0} associations
                 </p>
+
                 {review.issueCount > 0 && (
-                  <button type="button"
-                    onClick={() => action(() => downloadFile(ep('issues-report'), 'validation-issues.csv'), 'Preparing CSV…')}
-                    className="mt-3 flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-[12.5px] text-slate-700 hover:bg-slate-50 transition cursor-pointer">
-                    <Download className="w-4 h-4" />
-                    Download all {review.issueCount.toLocaleString()} validation issues (CSV)
-                  </button>
+                  <div className="mt-3 flex items-center gap-3">
+                    <button type="button"
+                      onClick={() => action(() => downloadFile(ep('issues-report'), 'validation-issues.csv'), 'Preparing CSV…')}
+                      className="flex items-center gap-2 px-3.5 py-2 rounded-lg border border-red-200 bg-white text-[12.5px] font-medium text-red-800 hover:bg-red-50/50 shadow-xs transition cursor-pointer">
+                      <Download className="w-4 h-4 text-red-600" />
+                      Download unique issues summary (CSV)
+                    </button>
+                    <span className="text-[11.5px] text-slate-500 italic">
+                      Deduplicated by Reference Column & Error Pattern
+                    </span>
+                  </div>
                 )}
-                {review.issues?.length > 0 && (
-                  <ul className="mt-3 text-[12px] text-red-700 list-disc ml-4 space-y-0.5">
-                    {review.issues.slice(0, 20).map((issue, i) => (
-                      <li key={i}>{issue.row ? `Row ${issue.row}: ` : ''}{issue.message}</li>
-                    ))}
-                    {review.issues.length > 20 && <li>…and {(review.issueCount - 20).toLocaleString()} more. Download CSV.</li>}
-                  </ul>
+
+                {((review.uniqueIssues && review.uniqueIssues.length > 0) || (review.issues && review.issues.length > 0)) && (
+                  <div className="mt-4 flex flex-col gap-2">
+                    <div className="text-[11px] font-bold text-red-900 uppercase tracking-wider flex items-center justify-between border-b border-red-200/60 pb-1.5">
+                      <span>Unique Validation Issues ({review.uniqueIssues?.length ?? review.issues.length})</span>
+                      <span className="text-[11px] font-normal text-slate-500 normal-case">Grouped by Reference Column & Error</span>
+                    </div>
+
+                    <div className="max-h-[360px] overflow-y-auto space-y-2 pr-1">
+                      {(review.uniqueIssues || review.issues).map((issue, i) => (
+                        <div key={i} className="p-3 bg-white border border-red-200/80 rounded-xl shadow-xs flex flex-col gap-1.5 text-[12px]">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 font-semibold text-[11px] border border-slate-200">
+                                Ref Column: <strong className="text-red-900">{issue.column || 'General'}</strong>
+                              </span>
+                              <span className="font-semibold text-red-950">{issue.message}</span>
+                            </div>
+                            {issue.count != null && (
+                              <span className="px-2 py-0.5 rounded-full bg-red-100/70 text-red-800 text-[11px] font-bold border border-red-200 shrink-0">
+                                {issue.count.toLocaleString()} row{issue.count > 1 ? 's' : ''} affected
+                              </span>
+                            )}
+                          </div>
+
+                          {(issue.sampleValues?.length > 0 || issue.exampleRows?.length > 0 || issue.row != null) && (
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-x-4 gap-y-1 text-[11.5px] text-slate-500 pt-1.5 border-t border-slate-100">
+                              {issue.sampleValues?.length > 0 && (
+                                <div className="truncate max-w-md">
+                                  <span className="text-slate-400 font-medium">Sample invalid values: </span>
+                                  <span className="font-mono text-red-700 font-semibold">{issue.sampleValues.slice(0, 4).map(v => `"${v}"`).join(', ')}</span>
+                                </div>
+                              )}
+                              {(issue.exampleRows?.length > 0 || issue.row != null) && (
+                                <div className="shrink-0">
+                                  <span className="text-slate-400 font-medium">Example rows: </span>
+                                  <span className="text-slate-700 font-semibold">
+                                    {issue.exampleRows?.length > 0
+                                      ? issue.exampleRows.slice(0, 6).map(r => `Row ${r}`).join(', ') + (issue.count > issue.exampleRows.length ? ` (+${issue.count - issue.exampleRows.length} more)` : '')
+                                      : `Row ${issue.row}`
+                                    }
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             ) : (

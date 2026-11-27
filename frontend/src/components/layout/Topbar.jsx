@@ -7,6 +7,10 @@ export function Topbar({ activeModule, isConnected }) {
         return 'HubSpot / Data Migrate';
       case 'data-migrate-association':
         return 'HubSpot / Association Migration';
+      case 'schema-manager':
+      case 'object-group-creation':
+      case 'property-creation':
+        return 'HubSpot / Object Group & Property Creation';
       case 'monday':
         return 'Monday to HubSpot';
       case 'history':

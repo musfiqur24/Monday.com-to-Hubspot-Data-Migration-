@@ -2,18 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { LayoutGrid, ChevronRight, History } from 'lucide-react';
 
 export function Sidebar({ activeModule, onSelectModule, mondayStep, onSelectMondayStep }) {
-  const [hubspotOpen, setHubspotOpen] = useState(
-    activeModule === 'data-migrate' || activeModule === 'data-migrate-association'
-  );
+  const isHubspotModule = [
+    'data-migrate',
+    'data-migrate-association',
+    'schema-manager',
+    'object-group-creation',
+    'property-creation',
+  ].includes(activeModule);
+
+  const [hubspotOpen, setHubspotOpen] = useState(isHubspotModule);
   const [mondayOpen, setMondayOpen] = useState(activeModule === 'monday');
 
   useEffect(() => {
-    if (activeModule === 'data-migrate' || activeModule === 'data-migrate-association') {
+    if (isHubspotModule) {
       setHubspotOpen(true);
     } else if (activeModule === 'monday') {
       setMondayOpen(true);
     }
-  }, [activeModule]);
+  }, [activeModule, isHubspotModule]);
 
   const handleMondayClick = (stepIndex) => {
     onSelectModule('monday');
@@ -63,7 +69,7 @@ export function Sidebar({ activeModule, onSelectModule, mondayStep, onSelectMond
           type="button"
           onClick={() => {
             setHubspotOpen(!hubspotOpen);
-            if (activeModule !== 'data-migrate' && activeModule !== 'data-migrate-association') {
+            if (!isHubspotModule) {
               onSelectModule('data-migrate');
             }
           }}
@@ -101,6 +107,22 @@ export function Sidebar({ activeModule, onSelectModule, mondayStep, onSelectMond
               }`}
             >
               Association Migration
+            </button>
+
+            {/* Section: Object group and property creation */}
+            <div className="pt-2 pb-1 px-3 text-[10px] font-bold tracking-wider text-slate-400 uppercase select-none">
+              Group &amp; Property Creation
+            </div>
+            <button
+              type="button"
+              onClick={() => onSelectModule('schema-manager')}
+              className={`px-3 py-2 rounded-md text-left text-xs transition border-0 cursor-pointer ${
+                activeModule === 'schema-manager' || activeModule === 'object-group-creation' || activeModule === 'property-creation'
+                  ? 'bg-[#fff0eb] text-[#df6d50] font-semibold'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50 font-medium bg-transparent'
+              }`}
+            >
+              Object Group &amp; Property Creation
             </button>
           </nav>
         )}

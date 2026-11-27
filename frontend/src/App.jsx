@@ -5,6 +5,7 @@ import { Sidebar } from './components/layout/Sidebar.jsx'
 import { Dashboard } from './pages/Dashboard.jsx'
 import { DataMigrate } from './pages/hubspot/DataMigrate.jsx'
 import { AssociationMigration } from './pages/hubspot/AssociationMigration.jsx'
+import { SchemaManager } from './pages/hubspot/SchemaManager.jsx'
 import { MondayMigration } from './pages/monday/MondayMigration.jsx'
 import { MigrationHistory } from './pages/MigrationHistory.jsx'
 
@@ -64,6 +65,10 @@ function AppInner() {
         return <DataMigrate key={activeModule} onShowToast={showToast} />;
       case 'data-migrate-association':
         return <AssociationMigration key={activeModule} onShowToast={showToast} />;
+      case 'schema-manager':
+      case 'object-group-creation':
+      case 'property-creation':
+        return <SchemaManager key={activeModule} onShowToast={showToast} />;
       case 'monday':
         return <MondayMigration key={activeModule} onShowToast={showToast} initialStep={mondayStep} onStepChange={setMondayStep} />;
       case 'history':

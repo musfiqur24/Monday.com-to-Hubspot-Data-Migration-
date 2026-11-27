@@ -155,13 +155,13 @@ function MappingRow({ item, properties, onChange, disabled }) {
   return (
     <React.Fragment>
       <tr className="hover:bg-slate-50 transition">
-        <td className="px-5 py-3">
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-slate-800 text-[12.5px]">{item.excel}</span>
+        <td className="px-5 py-3 truncate" title={item.excel}>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-semibold text-slate-800 text-[12.5px] truncate">{item.excel}</span>
             <Badge variant={kindBadgeVariant(item.kind)}>{item.kind}</Badge>
           </div>
         </td>
-        <td className="px-5 py-3 text-slate-400 text-[12px] max-w-[180px]">
+        <td className="px-5 py-3 text-slate-400 text-[12px] truncate" title={samples.join(' · ')}>
           {samples.length > 0
             ? <span className="truncate block">{samples.slice(0, 3).join(' · ')}</span>
             : <span className="italic">—</span>}
@@ -171,7 +171,7 @@ function MappingRow({ item, properties, onChange, disabled }) {
             {item.hubspotProperty ? 'mapped' : 'ignored'}
           </Badge>
         </td>
-        <td className="px-5 py-3 min-w-[260px]">
+        <td className="px-5 py-3">
           {item.kind !== 'email' && (
             <PropertyPicker
               value={item.hubspotProperty ?? ''}
@@ -1034,14 +1034,14 @@ export function MondayMigration({ onShowToast, initialStep = 0, onStepChange }) 
 
             {/* Scrollable table container with fixed max-height and sticky header */}
             <div className="overflow-x-auto max-h-[560px] overflow-y-auto border-t border-slate-100">
-              <table className="w-full text-[12.5px]">
+              <table className="w-full table-fixed text-[12.5px]">
                 <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10 shadow-2xs">
                   <tr>
-                    {['Source column', 'Sample values', 'Status', 'HubSpot property', ''].map(h => (
-                      <th key={h} className="px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap bg-slate-50">
-                        {h}
-                      </th>
-                    ))}
+                    <th className="w-[28%] min-w-[180px] px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">Source column</th>
+                    <th className="w-[26%] min-w-[180px] px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">Sample values</th>
+                    <th className="w-[10%] min-w-[90px] px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">Status</th>
+                    <th className="w-[28%] min-w-[240px] px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">HubSpot property</th>
+                    <th className="w-[8%] min-w-[80px] px-5 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide bg-slate-50"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
